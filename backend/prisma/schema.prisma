@@ -1,0 +1,130 @@
+// Prisma Schema - modernURL8
+// Database: MySQL (Legacy compatible)
+// Supports legacy url8 table with new multi-user support
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// URL8 - Main URL Table (Legacy Compatible)
+// ============================================
+
+model Url8 {
+  id          Int       @id @default(autoincrement())
+  shortUrl    String    @unique @map("shorturl") @db.VarChar(50)
+  targetUrl   String    @map("targeturl") @db.VarChar(2048)
+  keterangan  String?   @map("keterangan") @db.VarChar(255)
+  password    String?   @map("pswd") @db.VarChar(255) // bcrypt hashed
+  expDate     DateTime? @map("exp_date") @db.DateTime(0)
+  hitCounter  Int       @default(0) @map("hitcounter")
+  tglBuat     DateTime  @default(now()) @map("tglbuat") @db.DateTime(0)
+  tglReset    DateTime? @map("tglreset") @db.DateTime(0)
+  isActive    Boolean   @default(true) @map("is_active")
+
+  // New fields for multi-user
+  userId      Int?      @map("user_id")
+  title       String?   @db.VarChar(255)
+  description String?   @db.Text
+  createdAt   DateTime  @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.DateTime(0)
+
+  // Relations
+  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  hits        UrlHit[]
+
+  @@index([shortUrl], name: "idx_shorturl")
+  @@index([expDate], name: "idx_exp_date")
+  @@index([userId], name: "idx_user_id")
+  @@index([isActive], name: "idx_is_active")
+  @@map("url8")
+}
+
+// ============================================
+// USERS - User Management
+// ============================================
+
+model User {
+  id        Int       @id @default(autoincrement())
+  username  String    @unique @db.VarChar(50)
+  email     String    @unique @db.VarChar(255)
+  password  String    @db.VarChar(255) // bcrypt hashed
+  role      Role      @default(USER)
+  isActive  Boolean   @default(true) @map("is_active")
+  createdAt DateTime  @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.DateTime(0)
+
+  // Relations
+  urls       Url8[]
+  sessions   UserSession[]
+
+  @@index([email], name: "idx_email")
+  @@index([role], name: "idx_role")
+  @@map("users")
+}
+
+enum Role {
+  ADMIN
+  USER
+}
+
+// ============================================
+// USER_SESSIONS - JWT Refresh Tokens
+// ============================================
+
+model UserSession {
+  id           Int       @id @default(autoincrement())
+  userId       Int       @map("user_id")
+  token        String    @db.VarChar(255)
+  refreshToken String?   @map("refresh_token") @db.VarChar(255)
+  expiresAt    DateTime  @map("expires_at") @db.DateTime(0)
+  ipAddress    String?   @map("ip_address") @db.VarChar(45)
+  userAgent    String?   @map("user_agent") @db.VarChar(255)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.DateTime(0)
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token], name: "idx_token")
+  @@index([refreshToken], name: "idx_refresh_token")
+  @@index([expiresAt], name: "idx_expires")
+  @@map("user_sessions")
+}
+
+// ============================================
+// URL_HITS - Analytics / Hit Logs
+// ============================================
+
+model UrlHit {
+  id         Int       @id @default(autoincrement())
+  urlId      Int       @map("url_id")
+  shortUrl   String    @map("shorturl") @db.VarChar(50)
+  ipAddress  String?   @map("ip_address") @db.VarChar(45)
+  userAgent  String?   @map("user_agent") @db.VarChar(500)
+  referer    String?   @db.VarChar(500)
+  country    String?   @db.VarChar(50)
+  deviceType DeviceType @default(OTHER) @map("device_type")
+  browser    String?   @db.VarChar(100)
+  os         String?   @db.VarChar(100)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.DateTime(0)
+
+  // Relations
+  url Url8 @relation(fields: [urlId], references: [id], onDelete: Cascade)
+
+  @@index([shortUrl], name: "idx_hits_shorturl")
+  @@index([createdAt], name: "idx_hits_created")
+  @@index([ipAddress], name: "idx_hits_ip")
+  @@map("url_hits")
+}
+
+enum DeviceType {
+  DESKTOP
+  MOBILE
+  TABLET
+  OTHER
+}
