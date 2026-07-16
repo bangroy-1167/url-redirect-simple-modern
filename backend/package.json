@@ -4,9 +4,9 @@
   "description": "modernURL8 - URL Redirection Management System",
   "main": "dist/index.js",
   "scripts": {
-    "dev": "npm run dev:backend",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:backend": "tsx --watch src/index.ts",
-    "dev:frontend": "echo 'Frontend not implemented yet'",
+    "dev:frontend": "cd client && npm run dev",
     "build": "npm run build:backend && npm run build:frontend",
     "build:backend": "tsc",
     "build:frontend": "cd client && npm run build",
@@ -30,9 +30,9 @@
   "license": "MIT",
   "dependencies": {
     "@fastify/cors": "^9.0.1",
+    "@fastify/multipart": "^8.3.0",
     "@fastify/rate-limit": "^9.1.0",
     "@fastify/static": "^7.0.4",
-    "@fastify/multipart": "^8.3.0",
     "@prisma/client": "^5.15.0",
     "bcrypt": "^5.1.1",
     "fastify": "^4.28.1",

@@ -140,8 +140,7 @@ export async function adminRoutes(app: FastifyInstance) {
       if (existing) {
         return reply.status(400).send(
           validationFail({
-            field: existing.email === email ? 'email' : 'username',
-            message: ['User already exists'],
+            [existing.email === email ? 'email' : 'username']: ['User already exists'],
           })
         );
       }
@@ -282,7 +281,7 @@ export async function adminRoutes(app: FastifyInstance) {
   /**
    * GET /admin/stats - Global statistics
    */
-  app.get('/stats', async (request: FastifyRequest, reply: FastifyReply) => {
+  app.get('/stats', async (_request: FastifyRequest, reply: FastifyReply) => {
     const [totalUrls, totalUsers, totalHits, activeUrls, urlsByDay] = await Promise.all([
       prisma.url8.count(),
       prisma.user.count(),
@@ -310,14 +309,20 @@ export async function adminRoutes(app: FastifyInstance) {
       },
     });
     
+    // Convert BigInt to Number for JSON serialization
+    const recentActivity = (urlsByDay as unknown as Array<{ date: Date; count: bigint }>).map(row => ({
+      date: row.date,
+      count: Number(row.count)
+    }));
+    
     return reply.send(ok({
-      totalUrls,
-      totalUsers,
-      totalHits,
-      activeUrls,
-      inactiveUrls: totalUrls - activeUrls,
+      totalUrls: Number(totalUrls),
+      totalUsers: Number(totalUsers),
+      totalHits: Number(totalHits),
+      activeUrls: Number(activeUrls),
+      inactiveUrls: Number(totalUrls) - Number(activeUrls),
       topUrls,
-      recentActivity: urlsByDay,
+      recentActivity,
     }, 'Success'));
   });
 }

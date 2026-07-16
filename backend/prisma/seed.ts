@@ -1,7 +1,7 @@
 /**
  * prisma/seed.ts
  *
- * Seed database with initial admin user and sample data.
+ * Seed database with initial admin user, sample data, and default settings.
  */
 
 import { PrismaClient } from '@prisma/client';
@@ -9,11 +9,43 @@ import bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
+// Default settings for customizable UI messages
+const DEFAULT_SETTINGS = [
+  { key: 'welcome_title', value: 'Welcome to modernURL8', category: 'messages' },
+  { key: 'welcome_message', value: 'This is a URL redirection service. Please use a valid short URL to be redirected to your destination.', category: 'messages' },
+  { key: 'welcome_button_text', value: 'Go to Homepage', category: 'messages' },
+  { key: 'welcome_home_url', value: '/', category: 'messages' },
+  { key: 'notfound_title', value: 'Link Not Found', category: 'messages' },
+  { key: 'notfound_message', value: 'The short URL you entered does not exist or has been removed. Please check the URL and try again.', category: 'messages' },
+  { key: 'notfound_button_text', value: 'Go to Homepage', category: 'messages' },
+  { key: 'notfound_home_url', value: '/', category: 'messages' },
+  { key: 'expired_title', value: 'Link Expired', category: 'messages' },
+  { key: 'expired_message', value: 'This short URL has expired and is no longer available.', category: 'messages' },
+  { key: 'expired_button_text', value: 'Go to Homepage', category: 'messages' },
+  { key: 'expired_home_url', value: '/', category: 'messages' },
+  { key: 'app_name', value: 'modernURL8', category: 'general' },
+  { key: 'app_description', value: 'Modern URL Redirection Service', category: 'general' },
+];
+
 async function main() {
   console.log('🌱 Starting database seed...\n');
 
   // ========================
-  // 1. Create Admin User
+  // 1. Seed Default Settings
+  // ========================
+  console.log('⚙️  Seeding default settings...');
+  
+  for (const setting of DEFAULT_SETTINGS) {
+    await prisma.setting.upsert({
+      where: { key: setting.key },
+      update: { value: setting.value },
+      create: setting,
+    });
+  }
+  console.log(`   ✅ ${DEFAULT_SETTINGS.length} settings seeded\n`);
+
+  // ========================
+  // 2. Create Admin User
   // ========================
   console.log('👤 Creating admin user...');
 
@@ -41,7 +73,7 @@ async function main() {
   console.log(`   🔐 Password: admin123\n`);
 
   // ========================
-  // 2. Create Sample URL (for testing)
+  // 3. Create Sample URL (for testing)
   // ========================
   console.log('🔗 Creating sample URLs...');
 
@@ -78,24 +110,17 @@ async function main() {
   }
 
   // ========================
-  // 3. Migrate Legacy Data (if exists)
+  // Statistics
   // ========================
-  console.log('\n📊 Checking for legacy data migration...\n');
-
-  // Check if we need to migrate from legacy url8 table
-  // This is a placeholder for actual legacy migration logic
-  // The actual migration would:
-  // 1. Read from raw SQL query to existing url8 table
-  // 2. Transform data to new schema
-  // 3. Insert with userId = null (or create default user)
-
   const totalUrls = await prisma.url8.count();
   const totalUsers = await prisma.user.count();
   const totalHits = await prisma.urlHit.count();
+  const totalSettings = await prisma.setting.count();
 
-  console.log(`   📈 Total URLs: ${totalUrls}`);
+  console.log(`\n   📈 Total URLs: ${totalUrls}`);
   console.log(`   👥 Total Users: ${totalUsers}`);
-  console.log(`   📊 Total Hits: ${totalHits}\n`);
+  console.log(`   📊 Total Hits: ${totalHits}`);
+  console.log(`   ⚙️  Total Settings: ${totalSettings}\n`);
 
   // ========================
   // Summary
@@ -103,11 +128,14 @@ async function main() {
   console.log('═══════════════════════════════════════');
   console.log('✅ Database seed completed successfully!');
   console.log('═══════════════════════════════════════');
-  console.log('\n📋 Next steps:');
-  console.log('   1. Run: npm run dev:backend');
-  console.log('   2. Login at http://localhost:8002/api8url/auth/login');
-  console.log('   3. Credentials: admin@url8.local / admin123');
-  console.log('   4. Test URL: http://localhost:8002/api8url/demo\n');
+  console.log('\n📋 Access URLs:');
+  console.log('   🏠 Homepage:    http://localhost:38802/');
+  console.log('   🔗 Redirect:   http://localhost:38802/demo');
+  console.log('   🎛️  Admin:      http://localhost:38802/kelola');
+  console.log('   📦 API:        http://localhost:38802/api8url');
+  console.log('\n🔐 Login Credentials:');
+  console.log('   Email:    admin@url8.local');
+  console.log('   Password: admin123\n');
 }
 
 main()

@@ -70,7 +70,7 @@ function compileFilter(raw: unknown): unknown {
       if (k === 'in' && typeof val === 'string') val = String(val).split(',');
       if (['contains', 'starts', 'ends'].includes(k)) {
         out[prismaOp] = val;
-        out.mode = 'insensitive';
+        // Note: mode: 'insensitive' not supported in MySQL
       } else {
         out[prismaOp] = val;
       }
@@ -97,7 +97,7 @@ export function buildWhere(opts: BuildWhereOptions): Record<string, unknown> {
   // Search (OR contains across fields)
   if (opts.search?.term && opts.search.fields && opts.search.fields.length) {
     const or = opts.search.fields.map((f) => ({
-      [f]: { contains: opts.search!.term, mode: 'insensitive' },
+      [f]: { contains: opts.search!.term },
     }));
     and.push({ OR: or });
   }

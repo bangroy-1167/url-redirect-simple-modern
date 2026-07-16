@@ -6,6 +6,7 @@
  */
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import jwt from 'jsonwebtoken';
 import prisma from '../config/database';
 import { ok, fail, validationFail } from '../helpers/response.helper';
 import { parsePagination, buildMeta } from '../helpers/pagination.helper';
@@ -51,7 +52,26 @@ export async function urlRoutes(app: FastifyInstance) {
    * GET /urls - List user's URLs (paginated)
    */
   app.get('/', async (request: FastifyRequest, reply: FastifyReply) => {
-    const user = (request as any).user;
+    // Check authentication
+    const authHeader = request.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return reply.status(401).send({ success: false, message: 'Unauthorized: No token' });
+    }
+    
+    let userId: number | null = null;
+    try {
+      const token = authHeader.substring(7);
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'change-this-in-production') as { userId: number; id: number; email: string; role: string };
+      userId = decoded.userId || decoded.id;
+      (request as any).user = decoded;
+    } catch {
+      return reply.status(401).send({ success: false, message: 'Unauthorized: Invalid token' });
+    }
+    
+    if (!userId) {
+      return reply.status(401).send({ success: false, message: 'Unauthorized: Invalid token payload' });
+    }
+    
     const pg = parsePagination(request.query as Record<string, unknown>, {
       defaultSortBy: 'createdAt',
       defaultSortDir: 'desc',
@@ -60,7 +80,7 @@ export async function urlRoutes(app: FastifyInstance) {
     const where = buildWhere({
       search: pg.search ? { term: pg.search, fields: ['shortUrl', 'title', 'keterangan'] } : undefined,
       filters: pg.filters,
-      extra: { userId: user.userId },
+      extra: { userId: userId },
       allowedFilters: ['isActive'],
     });
     
@@ -112,7 +132,26 @@ export async function urlRoutes(app: FastifyInstance) {
       },
     },
     async (request: FastifyRequest<{ Body: CreateUrlBody }>, reply: FastifyReply) => {
-      const user = (request as any).user;
+      // Check authentication
+      const authHeader = request.headers.authorization;
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return reply.status(401).send(fail('Unauthorized: No token provided'));
+      }
+      
+      let userId: number | null = null;
+      try {
+        const token = authHeader.substring(7);
+        const jwtSecret = process.env.JWT_SECRET || 'change-this-in-production';
+        const decoded = jwt.verify(token, jwtSecret) as { userId: number; id: number; email: string; role: string };
+        userId = decoded.userId || decoded.id;
+      } catch {
+        return reply.status(401).send(fail('Unauthorized: Invalid or expired token'));
+      }
+      
+      if (!userId) {
+        return reply.status(401).send(fail('Unauthorized: Invalid token payload'));
+      }
+      
       const { shortUrl, targetUrl, title, description, password, expiresAt } = request.body;
       
       // Generate short URL if not provided
@@ -158,7 +197,7 @@ export async function urlRoutes(app: FastifyInstance) {
           description,
           password: hashedPassword,
           expDate: expiresAt ? new Date(expiresAt) : null,
-          userId: user.userId,
+          userId: userId,
         },
       });
       
@@ -167,10 +206,8 @@ export async function urlRoutes(app: FastifyInstance) {
         shortUrl: url.shortUrl,
         targetUrl: url.targetUrl,
         title: url.title,
-        description: url.description,
-        expDate: url.expDate,
+        hitCounter: url.hitCounter,
         isActive: url.isActive,
-        createdAt: url.createdAt,
       }, 'URL created successfully'));
     }
   );
@@ -181,24 +218,17 @@ export async function urlRoutes(app: FastifyInstance) {
   app.get<{ Params: URLParams }>(
     '/:id',
     async (request: FastifyRequest<{ Params: URLParams }>, reply: FastifyReply) => {
-      const user = (request as any).user;
       const { id } = request.params;
       
-      const url = await prisma.url8.findFirst({
-        where: {
-          id: parseInt(id, 10),
-          userId: user.userId,
-        },
+      const url = await prisma.url8.findUnique({
+        where: { id: parseInt(id, 10) },
       });
       
       if (!url) {
         return reply.status(404).send(fail('URL not found'));
       }
       
-      return reply.send(ok({
-        ...url,
-        password: undefined, // Don't expose password
-      }, 'Success'));
+      return reply.send(ok(url, 'Success'));
     }
   );
   
@@ -208,37 +238,32 @@ export async function urlRoutes(app: FastifyInstance) {
   app.put<{ Params: URLParams; Body: UpdateUrlBody }>(
     '/:id',
     async (request: FastifyRequest<{ Params: URLParams; Body: UpdateUrlBody }>, reply: FastifyReply) => {
-      const user = (request as any).user;
       const { id } = request.params;
       const data = request.body;
       
-      // Check ownership
-      const existing = await prisma.url8.findFirst({
-        where: {
-          id: parseInt(id, 10),
-          userId: user.userId,
-        },
+      const url = await prisma.url8.findUnique({
+        where: { id: parseInt(id, 10) },
       });
       
-      if (!existing) {
+      if (!url) {
         return reply.status(404).send(fail('URL not found'));
       }
       
-      // Hash password if provided and changed
-      let hashedPassword: string | null | undefined = undefined;
+      // Hash password if provided
+      let hashedPassword: string | null | undefined;
       if (data.password !== undefined) {
         if (data.password) {
           const bcrypt = await import('bcrypt');
           hashedPassword = await bcrypt.hash(data.password, 12);
         } else {
-          hashedPassword = null; // Remove password
+          hashedPassword = null;
         }
       }
       
-      // Update URL
-      const url = await prisma.url8.update({
+      const updated = await prisma.url8.update({
         where: { id: parseInt(id, 10) },
         data: {
+          ...(data.shortUrl && { shortUrl: data.shortUrl }),
           ...(data.targetUrl && { targetUrl: data.targetUrl }),
           ...(data.title !== undefined && { title: data.title }),
           ...(data.description !== undefined && { description: data.description }),
@@ -248,10 +273,7 @@ export async function urlRoutes(app: FastifyInstance) {
         },
       });
       
-      return reply.send(ok({
-        ...url,
-        password: undefined,
-      }, 'URL updated successfully'));
+      return reply.send(ok(updated, 'URL updated successfully'));
     }
   );
   
@@ -261,22 +283,16 @@ export async function urlRoutes(app: FastifyInstance) {
   app.delete<{ Params: URLParams }>(
     '/:id',
     async (request: FastifyRequest<{ Params: URLParams }>, reply: FastifyReply) => {
-      const user = (request as any).user;
       const { id } = request.params;
       
-      // Check ownership
-      const existing = await prisma.url8.findFirst({
-        where: {
-          id: parseInt(id, 10),
-          userId: user.userId,
-        },
+      const url = await prisma.url8.findUnique({
+        where: { id: parseInt(id, 10) },
       });
       
-      if (!existing) {
+      if (!url) {
         return reply.status(404).send(fail('URL not found'));
       }
       
-      // Delete URL (cascade deletes hits)
       await prisma.url8.delete({
         where: { id: parseInt(id, 10) },
       });
@@ -291,23 +307,17 @@ export async function urlRoutes(app: FastifyInstance) {
   app.post<{ Params: URLParams }>(
     '/:id/reset-counter',
     async (request: FastifyRequest<{ Params: URLParams }>, reply: FastifyReply) => {
-      const user = (request as any).user;
       const { id } = request.params;
       
-      // Check ownership
-      const existing = await prisma.url8.findFirst({
-        where: {
-          id: parseInt(id, 10),
-          userId: user.userId,
-        },
+      const url = await prisma.url8.findUnique({
+        where: { id: parseInt(id, 10) },
       });
       
-      if (!existing) {
+      if (!url) {
         return reply.status(404).send(fail('URL not found'));
       }
       
-      // Reset counter
-      const url = await prisma.url8.update({
+      await prisma.url8.update({
         where: { id: parseInt(id, 10) },
         data: {
           hitCounter: 0,
@@ -315,7 +325,7 @@ export async function urlRoutes(app: FastifyInstance) {
         },
       });
       
-      return reply.send(ok({ hitCounter: url.hitCounter }, 'Counter reset successfully'));
+      return reply.send(ok(null, 'Counter reset successfully'));
     }
   );
 }
