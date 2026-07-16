@@ -1,0 +1,31 @@
+# backend/.gitignore
+# Override root .gitignore: dist/ dan public/ PERLU masuk Git
+# agar deploy ke cPanel Node.js hosting bisa pull langsung tanpa build di server.
+
+# Allow build artifacts
+!dist/
+!dist/**
+!public/
+!public/**
+
+# Tetap ignore uploads (media files — jangan commit ke Git)
+uploads/
+uploads/**
+
+# Tetap ignore node_modules
+node_modules/
+
+# Tetap ignore semua env files (contoh/template boleh masuk Git)
+.env
+.env.local
+.env.production
+.env.docker
+
+# Ignore logs (jangan commit ke Git)
+logs/
+logs/**
+
+.cline/
+Cline/**
+
+old/
