@@ -315,7 +315,7 @@ export default function UrlsPage() {
                       </button>
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-sm">
+                  <td className="px-6 py-4 text-sm text-gray-900">
                     <div className="max-w-xs truncate" title={url.title || url.keterangan || '-'}>
                       {url.title || url.keterangan || '-'}
                     </div>

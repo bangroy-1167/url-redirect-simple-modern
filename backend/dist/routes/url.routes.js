@@ -186,6 +186,7 @@ async function urlRoutes(app) {
      * PUT /urls/:id - Update URL
      */
     app.put('/:id', async (request, reply) => {
+        console.log('[DEBUG PUT /urls/:id] Route matched! id:', request.params.id, 'body:', JSON.stringify(request.body));
         const { id } = request.params;
         const data = request.body;
         const url = await database_1.default.url8.findUnique({
