@@ -17,11 +17,16 @@ export default function UrlFoundPage() {
   const [urlInfo, setUrlInfo] = useState<UrlInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [countdown, setCountdown] = useState(settings.autoRedirectDelay || 2);
+  const [countdown, setCountdown] = useState(2);
   const [copied, setCopied] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
 
   const baseUrl = window.location.origin;
+
+  // Sync countdown with settings when settings loads
+  useEffect(() => {
+    setCountdown(settings.autoRedirectDelay || 2);
+  }, [settings.autoRedirectDelay]);
 
   useEffect(() => {
     const fetchUrlInfo = async () => {
