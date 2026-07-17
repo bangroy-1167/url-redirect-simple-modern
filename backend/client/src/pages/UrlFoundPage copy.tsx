@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { useSettings } from '../contexts/SettingsContext';
 import { CheckCircle, ExternalLink, Clock, AlertCircle, Copy, Check } from 'lucide-react';
 
 interface UrlInfo {
@@ -13,11 +12,10 @@ interface UrlInfo {
 
 export default function UrlFoundPage() {
   const { shortUrl } = useParams<{ shortUrl: string }>();
-  const { settings } = useSettings();
   const [urlInfo, setUrlInfo] = useState<UrlInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [countdown, setCountdown] = useState(settings.autoRedirectDelay || 2);
+  const [countdown, setCountdown] = useState(2);
   const [copied, setCopied] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
 
@@ -57,7 +55,7 @@ export default function UrlFoundPage() {
 
   // Countdown timer
   useEffect(() => {
-    if (loading || error || !urlInfo || !settings.autoRedirect) return;
+    if (loading || error || !urlInfo) return;
     
     const timer = setInterval(() => {
       setCountdown(prev => {
@@ -72,7 +70,7 @@ export default function UrlFoundPage() {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [loading, error, urlInfo, settings.autoRedirect]);
+  }, [loading, error, urlInfo]);
 
   const copyToClipboard = async () => {
     if (urlInfo) {
@@ -214,20 +212,14 @@ export default function UrlFoundPage() {
 
         {/* Countdown & Redirect Info */}
         <div className="text-center mb-6">
-          {settings.autoRedirect ? (
-            isRedirecting ? (
-              <p className="text-sm text-gray-500 flex items-center justify-center gap-2">
-                <Clock className="w-4 h-4" />
-                Mengalihkan ke halaman tujuan dalam {countdown} detik...
-              </p>
-            ) : (
-              <p className="text-sm text-gray-500">
-                Mempersiapkan redirect...
-              </p>
-            )
+          {isRedirecting ? (
+            <p className="text-sm text-gray-500 flex items-center justify-center gap-2">
+              <Clock className="w-4 h-4" />
+              Mengalihkan ke halaman tujuan dalam {countdown} detik...
+            </p>
           ) : (
             <p className="text-sm text-gray-500">
-              Auto-redirect dinonaktifkan. Klik tombol untuk redirect.
+              Mempersiapkan redirect...
             </p>
           )}
         </div>

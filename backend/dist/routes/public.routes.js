@@ -13,6 +13,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.publicRoutes = publicRoutes;
 const qrcode_1 = __importDefault(require("qrcode"));
 const database_1 = __importDefault(require("../config/database"));
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
+const API_PREFIX = process.env.API_PREFIX || '/api8url';
 // Default messages (fallback if not in database)
 const DEFAULT_MESSAGES = {
     welcomeTitle: 'Welcome to modernURL8',
@@ -28,7 +31,7 @@ const DEFAULT_MESSAGES = {
 // Helper to get setting from database
 async function getSetting(key, fallback) {
     try {
-        const setting = await database_1.default.setting.findUnique({ where: { key } });
+        const setting = await database_1.default.urRedirectSet.findUnique({ where: { key } });
         return setting?.value || fallback;
     }
     catch {
@@ -81,13 +84,13 @@ async function publicRoutes(app) {
         return reply.type('text/html').send(renderHtml(title, message, buttonText, buttonUrl));
     });
     /**
-     * GET /:shortUrl - Redirect to target URL
-     * CRITICAL: Uses GET redirect only - works with Google Drive!
+     * GET /:shortUrl - Show URL Found page, then redirect
+     * This shows a preview page before redirecting
      */
     app.get('/:shortUrl', { schema: { params: { type: 'object', properties: { shortUrl: { type: 'string' } } } } }, async (request, reply) => {
         const { shortUrl } = request.params;
         // Skip if it's an API route pattern
-        if (shortUrl.startsWith('api') || shortUrl.startsWith('auth') || shortUrl.startsWith('kelola')) {
+        if (shortUrl.startsWith('api') || shortUrl.startsWith('auth') || shortUrl.startsWith('kelola') || shortUrl.startsWith('f/')) {
             return reply.status(404).send({ success: false, message: 'Not found' });
         }
         // Handle QR code request
@@ -136,8 +139,6 @@ async function publicRoutes(app) {
                     passwordProtected: true,
                 });
             }
-            // Note: In production, compare bcrypt hashes
-            // For now, simple comparison (will be enhanced)
             if (providedPassword !== url.password) {
                 return reply.status(401).send({
                     success: false,
@@ -164,17 +165,32 @@ async function publicRoutes(app) {
             });
         }
         catch (err) {
-            // Don't fail redirect if analytics logging fails
             console.error('Failed to log hit:', err);
         }
-        // Redirect with 302 (Temporary Redirect) - works with Google Drive
-        return reply.redirect(302, url.targetUrl);
+        // REDIRECT to URL Found page instead of direct redirect
+        // This allows user to see info before being redirected
+        const baseUrl = `${request.protocol}://${request.hostname}`;
+        return reply.redirect(302, `${baseUrl}/f/${shortUrl}`);
     });
     /**
-     * GET /f/:shortUrl - URL Found page info (for frontend redirect page)
-     * Returns URL info WITHOUT redirecting
+    /**
+     * GET /f/:shortUrl - Serve SPA for URL Found page
+     * This serves the React SPA so frontend can handle routing
      */
-    app.get('/f/:shortUrl', { schema: { params: { type: 'object', properties: { shortUrl: { type: 'string' } } } } }, async (request, reply) => {
+    app.get('/f/:shortUrl', async (request, reply) => {
+        // Redirect to the SPA index - React Router will handle the route
+        const indexPath = path_1.default.join(process.cwd(), 'public', 'index.html');
+        if (fs_1.default.existsSync(indexPath)) {
+            const html = fs_1.default.readFileSync(indexPath, 'utf-8');
+            return reply.type('text/html').send(html);
+        }
+        return reply.status(404).send('Not found');
+    });
+    /**
+     * GET /api8url/f/:shortUrl - URL Found page info (for frontend redirect page)
+     * Returns URL info as JSON
+     */
+    app.get(`${API_PREFIX}/f/:shortUrl`, { schema: { params: { type: 'object', properties: { shortUrl: { type: 'string' } } } } }, async (request, reply) => {
         const { shortUrl } = request.params;
         const url = await database_1.default.url8.findUnique({
             where: { shortUrl },

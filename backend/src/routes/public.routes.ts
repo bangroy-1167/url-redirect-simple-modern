@@ -9,6 +9,10 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import QRCode from 'qrcode';
 import prisma from '../config/database';
+import fs from 'fs';
+import path from 'path';
+
+const API_PREFIX = process.env.API_PREFIX || '/api8url';
 
 interface RedirectParams {
   shortUrl: string;
@@ -34,7 +38,7 @@ const DEFAULT_MESSAGES = {
 // Helper to get setting from database
 async function getSetting(key: string, fallback: string): Promise<string> {
   try {
-    const setting = await prisma.setting.findUnique({ where: { key } });
+    const setting = await prisma.urRedirectSet.findUnique({ where: { key } });
     return setting?.value || fallback;
   } catch {
     return fallback;
@@ -92,8 +96,8 @@ export async function publicRoutes(app: FastifyInstance) {
   });
 
   /**
-   * GET /:shortUrl - Redirect to target URL
-   * CRITICAL: Uses GET redirect only - works with Google Drive!
+   * GET /:shortUrl - Show URL Found page, then redirect
+   * This shows a preview page before redirecting
    */
   app.get<{ Params: RedirectParams }>(
     '/:shortUrl',
@@ -102,7 +106,7 @@ export async function publicRoutes(app: FastifyInstance) {
       const { shortUrl } = request.params;
       
       // Skip if it's an API route pattern
-      if (shortUrl.startsWith('api') || shortUrl.startsWith('auth') || shortUrl.startsWith('kelola')) {
+      if (shortUrl.startsWith('api') || shortUrl.startsWith('auth') || shortUrl.startsWith('kelola') || shortUrl.startsWith('f/')) {
         return reply.status(404).send({ success: false, message: 'Not found' });
       }
       
@@ -158,8 +162,6 @@ export async function publicRoutes(app: FastifyInstance) {
             passwordProtected: true,
           });
         }
-        // Note: In production, compare bcrypt hashes
-        // For now, simple comparison (will be enhanced)
         if (providedPassword !== url.password) {
           return reply.status(401).send({
             success: false,
@@ -187,21 +189,40 @@ export async function publicRoutes(app: FastifyInstance) {
           },
         });
       } catch (err) {
-        // Don't fail redirect if analytics logging fails
         console.error('Failed to log hit:', err);
       }
       
-      // Redirect with 302 (Temporary Redirect) - works with Google Drive
-      return reply.redirect(302, url.targetUrl);
+      // REDIRECT to URL Found page instead of direct redirect
+      // This allows user to see info before being redirected
+      const baseUrl = `${request.protocol}://${request.hostname}`;
+      return reply.redirect(302, `${baseUrl}/f/${shortUrl}`);
     }
   );
   
   /**
-   * GET /f/:shortUrl - URL Found page info (for frontend redirect page)
-   * Returns URL info WITHOUT redirecting
+  /**
+   * GET /f/:shortUrl - Serve SPA for URL Found page
+   * This serves the React SPA so frontend can handle routing
    */
   app.get<{ Params: RedirectParams }>(
     '/f/:shortUrl',
+    async (request: FastifyRequest<{ Params: RedirectParams }>, reply: FastifyReply) => {
+      // Redirect to the SPA index - React Router will handle the route
+      const indexPath = path.join(process.cwd(), 'public', 'index.html');
+      if (fs.existsSync(indexPath)) {
+        const html = fs.readFileSync(indexPath, 'utf-8');
+        return reply.type('text/html').send(html);
+      }
+      return reply.status(404).send('Not found');
+    }
+  );
+  
+  /**
+   * GET /api8url/f/:shortUrl - URL Found page info (for frontend redirect page)
+   * Returns URL info as JSON
+   */
+  app.get<{ Params: RedirectParams }>(
+    `${API_PREFIX}/f/:shortUrl`,
     { schema: { params: { type: 'object', properties: { shortUrl: { type: 'string' } } } } },
     async (request: FastifyRequest<{ Params: RedirectParams }>, reply: FastifyReply) => {
       const { shortUrl } = request.params;

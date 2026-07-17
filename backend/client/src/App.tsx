@@ -1,9 +1,11 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { SettingsProvider } from './contexts/SettingsContext';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import UrlsPage from './pages/UrlsPage';
 import UsersPage from './pages/UsersPage';
+import SettingsPage from './pages/SettingsPage';
 import LogoutPage from './pages/LogoutPage';
 import UrlFoundPage from './pages/UrlFoundPage';
 
@@ -45,39 +47,49 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 
 function AppRoutes() {
   return (
-    <Routes>
-      {/* Public route for URL found page with auto-redirect */}
-      <Route path="/f/:shortUrl" element={<UrlFoundPage />} />
-      
-      <Route path="/kelola/login" element={<LoginPage />} />
-      <Route path="/kelola/logout" element={<LogoutPage />} />
-      <Route
-        path="/kelola"
-        element={
-          <ProtectedRoute>
-            <DashboardPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/kelola/urls"
-        element={
-          <ProtectedRoute>
-            <UrlsPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/kelola/users"
-        element={
-          <AdminRoute>
-            <UsersPage />
-          </AdminRoute>
-        }
-      />
-      <Route path="/" element={<Navigate to="/kelola" replace />} />
-      <Route path="*" element={<Navigate to="/kelola" replace />} />
-    </Routes>
+    <SettingsProvider>
+      <Routes>
+        {/* public route for URL found page with auto-redirect */}
+        <Route path="/f/:shortUrl" element={<UrlFoundPage />} />
+        
+        <Route path="/kelola/login" element={<LoginPage />} />
+        <Route path="/kelola/logout" element={<LogoutPage />} />
+        <Route
+          path="/kelola"
+          element={
+            <ProtectedRoute>
+              <DashboardPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/kelola/urls"
+          element={
+            <ProtectedRoute>
+              <UrlsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/kelola/users"
+          element={
+            <AdminRoute>
+              <UsersPage />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="/kelola/settings"
+          element={
+            <AdminRoute>
+              <SettingsPage />
+            </AdminRoute>
+          }
+        />
+        <Route path="/" element={<Navigate to="/kelola" replace />} />
+        <Route path="*" element={<Navigate to="/kelola" replace />} />
+      </Routes>
+    </SettingsProvider>
   );
 }
 

@@ -82,16 +82,17 @@ async function buildApp() {
     return { status: 'ok', timestamp: new Date().toISOString() };
   });
 
-  // SPA routes for /kelola/*
+  // Public routes FIRST (clean URL redirect) - must be before SPA routes
+  await app.register(publicRoutes);
+
+  // SPA routes for /kelola/* - registered AFTER public routes
   app.get('/kelola', async (request, reply) => sendSpaIndex(request, reply));
   app.get('/kelola/', async (request, reply) => sendSpaIndex(request, reply));
   app.get('/kelola/login', async (request, reply) => sendSpaIndex(request, reply));
   app.get('/kelola/logout', async (request, reply) => sendSpaIndex(request, reply));
   app.get('/kelola/urls', async (request, reply) => sendSpaIndex(request, reply));
   app.get('/kelola/users', async (request, reply) => sendSpaIndex(request, reply));
-
-  // Public routes (clean URL redirect)
-  await app.register(publicRoutes);
+  app.get('/kelola/settings', async (request, reply) => sendSpaIndex(request, reply));
 
   // Register auth middleware
   await app.register(authMiddleware);

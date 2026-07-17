@@ -33,8 +33,10 @@ export interface Url8 {
   targetUrl: string;
   title?: string;
   keterangan?: string;
+  description?: string;
   password?: string | null;
   expiresAt?: string | null;
+  expDate?: string | null;
   hitCounter: number;
   isActive: boolean;
   createdAt: string;

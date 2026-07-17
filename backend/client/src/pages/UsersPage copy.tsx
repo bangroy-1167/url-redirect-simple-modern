@@ -4,13 +4,14 @@ import { useSettings } from '../contexts/SettingsContext';
 import { adminUserApi } from '../api/client';
 import { User } from '../types/api';
 import Layout from '../components/Layout';
-import Pagination from '../components/Pagination';
 import {
   Plus,
   Pencil,
   Trash2,
   Search,
   AlertCircle,
+  ChevronLeft,
+  ChevronRight,
   ChevronUp,
   ChevronDown,
   X,
@@ -61,30 +62,9 @@ export default function UsersPage() {
       if (search) params.search = search;
 
       const response = await adminUserApi.list(params);
-      
-      // Handle multiple response formats
-      let usersData: User[] = [];
-      if (Array.isArray(response.data)) {
-        usersData = response.data;
-      } else if (response.data?.data && Array.isArray(response.data.data)) {
-        usersData = response.data.data;
-      } else if (response.data?.users && Array.isArray(response.data.users)) {
-        usersData = response.data.users;
-      }
-      
-      setUsers(usersData);
-      
-      // Handle pagination
-      if (response.data?.meta) {
+      setUsers(response.data.data || []);
+      if (response.data.meta) {
         setPagination((p) => ({ ...p, ...response.data.meta }));
-      } else if (response.data?.pagination) {
-        setPagination((p) => ({ ...p, ...response.data.pagination }));
-      } else if (response.data?.total !== undefined) {
-        setPagination((p) => ({ 
-          ...p, 
-          total: response.data.total || 0,
-          total_pages: response.data.total_pages || Math.ceil((response.data.total || 0) / p.per_page)
-        }));
       }
     } catch {
       setError('Gagal memuat users');
@@ -355,15 +335,28 @@ export default function UsersPage() {
           </div>
 
           {/* Pagination */}
-          {pagination.total_pages > 0 && (
-            <Pagination
-              page={pagination.page}
-              perPage={pagination.per_page}
-              totalPages={pagination.total_pages}
-              total={pagination.total}
-              onPageChange={(page) => setPagination((p) => ({ ...p, page }))}
-              onPerPageChange={(per_page) => setPagination((p) => ({ ...p, per_page, page: 1 }))}
-            />
+          {pagination.total_pages > 1 && (
+            <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+              <span className="text-sm text-gray-500">
+                Halaman {pagination.page} dari {pagination.total_pages} ({pagination.total} total)
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setPagination((p) => ({ ...p, page: p.page - 1 }))}
+                  disabled={pagination.page === 1}
+                  className="p-2 hover:bg-gray-100 rounded disabled:opacity-50"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setPagination((p) => ({ ...p, page: p.page + 1 }))}
+                  disabled={pagination.page === pagination.total_pages}
+                  className="p-2 hover:bg-gray-100 rounded disabled:opacity-50"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
           )}
         </div>
       </Layout>

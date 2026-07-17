@@ -259,5 +259,50 @@ async function adminRoutes(app) {
             recentActivity,
         }, 'Success'));
     });
+    /**
+     * GET /admin/settings - Get all settings
+     */
+    app.get('/settings', async (request, reply) => {
+        // Get all settings from database
+        const settings = await database_1.default.urRedirectSet.findMany();
+        // Convert to key-value object
+        const settingsMap = {};
+        settings.forEach(s => {
+            settingsMap[s.key] = s.value;
+        });
+        // Get defaults from .env for rate limits
+        const result = {
+            appName: settingsMap['app_name'] || 'modernURL8',
+            appSubtitle: settingsMap['app_subtitle'] || 'URL Redirection Service',
+            autoRedirect: settingsMap['auto_redirect'] !== 'false',
+            autoRedirectDelay: parseInt(settingsMap['auto_redirect_delay'] || '2', 10),
+            rateLimitPublic: parseInt(settingsMap['rate_limit_public'] || process.env.RATE_LIMIT_PUBLIC || '20', 10),
+            rateLimitAuth: parseInt(settingsMap['rate_limit_auth'] || process.env.RATE_LIMIT_AUTH || '100', 10),
+        };
+        return reply.send((0, response_helper_1.ok)(result, 'Success'));
+    });
+    /**
+     * PUT /admin/settings - Update settings
+     */
+    app.put('/settings', async (request, reply) => {
+        const data = request.body;
+        const settingsToUpdate = [
+            { key: 'app_name', value: String(data.appName || 'modernURL8') },
+            { key: 'app_subtitle', value: String(data.appSubtitle || 'URL Redirection Service') },
+            { key: 'auto_redirect', value: String(data.autoRedirect !== false) },
+            { key: 'auto_redirect_delay', value: String(data.autoRedirectDelay || 2) },
+            { key: 'rate_limit_public', value: String(data.rateLimitPublic || 20) },
+            { key: 'rate_limit_auth', value: String(data.rateLimitAuth || 100) },
+        ];
+        // Upsert each setting
+        for (const setting of settingsToUpdate) {
+            await database_1.default.urRedirectSet.upsert({
+                where: { key: setting.key },
+                update: { value: setting.value },
+                create: { key: setting.key, value: setting.value },
+            });
+        }
+        return reply.send((0, response_helper_1.ok)(null, 'Settings updated successfully'));
+    });
 }
 //# sourceMappingURL=admin.routes.js.map

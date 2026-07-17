@@ -126,7 +126,7 @@ model UrlHit {
 // SETTINGS - Customizable UI Messages
 // ============================================
 
-model Setting {
+model UrRedirectSet {
   id        Int      @id @default(autoincrement())
   key       String   @unique @db.VarChar(100)
   value     String   @db.Text
@@ -134,7 +134,7 @@ model Setting {
   createdAt DateTime @default(now()) @map("created_at") @db.DateTime(0)
   updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(0)
 
-  @@map("settings")
+  @@map("urRedirectSets")
 }
 
 enum DeviceType {
