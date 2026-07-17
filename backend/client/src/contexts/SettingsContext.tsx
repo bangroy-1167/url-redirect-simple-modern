@@ -40,11 +40,31 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   const fetchSettings = async () => {
     try {
-      const response = await fetch('/api8url/admin/settings', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-      });
+      // Check if user is logged in
+      const token = localStorage.getItem('token');
+      let url = '/api8url/settings'; // Public endpoint
+      
+      if (token) {
+        // Try admin endpoint first if logged in
+        try {
+          const response = await fetch('/api8url/admin/settings', {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+          });
+          const data = await response.json();
+          if (data.success && data.data) {
+            setSettings(data.data);
+            setLoading(false);
+            return;
+          }
+        } catch (err) {
+          console.log('Admin settings fetch failed, using public settings');
+        }
+      }
+      
+      // Fallback to public endpoint
+      const response = await fetch(url);
       const data = await response.json();
       if (data.success && data.data) {
         setSettings(data.data);

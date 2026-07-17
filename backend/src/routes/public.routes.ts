@@ -279,6 +279,35 @@ export async function publicRoutes(app: FastifyInstance) {
       });
     }
   );
+
+  /**
+   * GET /settings - Get public settings (no auth required)
+   */
+  app.get('/settings', async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const settings = await prisma.urRedirectSet.findMany();
+      const settingsMap: Record<string, string> = {};
+      settings.forEach(s => {
+        settingsMap[s.key] = s.value;
+      });
+
+      return reply.send({
+        success: true,
+        data: {
+          appName: settingsMap['app_name'] || 'modernURL8',
+          appSubtitle: settingsMap['app_subtitle'] || 'URL Redirection Service',
+          autoRedirect: settingsMap['auto_redirect'] !== 'false',
+          autoRedirectDelay: parseInt(settingsMap['auto_redirect_delay'] || '2', 10),
+          rateLimitPublic: parseInt(settingsMap['rate_limit_public'] || '20', 10),
+        },
+      });
+    } catch (error) {
+      return reply.status(500).send({
+        success: false,
+        message: 'Failed to load settings',
+      });
+    }
+  });
   
   /**
    * GET /:shortUrl/info - Get public URL info

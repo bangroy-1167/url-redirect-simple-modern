@@ -240,6 +240,34 @@ async function publicRoutes(app) {
         });
     });
     /**
+     * GET /settings - Get public settings (no auth required)
+     */
+    app.get('/settings', async (request, reply) => {
+        try {
+            const settings = await database_1.default.urRedirectSet.findMany();
+            const settingsMap = {};
+            settings.forEach(s => {
+                settingsMap[s.key] = s.value;
+            });
+            return reply.send({
+                success: true,
+                data: {
+                    appName: settingsMap['app_name'] || 'modernURL8',
+                    appSubtitle: settingsMap['app_subtitle'] || 'URL Redirection Service',
+                    autoRedirect: settingsMap['auto_redirect'] !== 'false',
+                    autoRedirectDelay: parseInt(settingsMap['auto_redirect_delay'] || '2', 10),
+                    rateLimitPublic: parseInt(settingsMap['rate_limit_public'] || '20', 10),
+                },
+            });
+        }
+        catch (error) {
+            return reply.status(500).send({
+                success: false,
+                message: 'Failed to load settings',
+            });
+        }
+    });
+    /**
      * GET /:shortUrl/info - Get public URL info
      */
     app.get('/:shortUrl/info', { schema: { params: { type: 'object', properties: { shortUrl: { type: 'string' } } } } }, async (request, reply) => {
