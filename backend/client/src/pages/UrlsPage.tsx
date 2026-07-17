@@ -160,6 +160,7 @@ export default function UrlsPage() {
       password: '',
       expiresAt: url.expDate ? String(url.expDate).split('T')[0] : ''
     };
+    setModalMode('edit'); // <-- THIS WAS MISSING!
     setFormData(data);
     setOriginalData(data);
     setSelectedUrl(url);
@@ -197,12 +198,28 @@ export default function UrlsPage() {
       if (formData.shortUrl) data.shortUrl = formData.shortUrl.toLowerCase();
       if (formData.password) data.password = formData.password;
       if (formData.expiresAt) data.expiresAt = new Date(formData.expiresAt).toISOString();
-      if (modalMode === 'create') await urlApi.create(data);
-      else if (selectedUrl) await urlApi.update(selectedUrl.id, data);
+      
+      // DEBUG: Log the submission details
+      console.log('[DEBUG handleSubmit] modalMode:', modalMode);
+      console.log('[DEBUG handleSubmit] selectedUrl:', selectedUrl);
+      console.log('[DEBUG handleSubmit] formData.shortUrl:', formData.shortUrl);
+      console.log('[DEBUG handleSubmit] data:', data);
+      
+      if (modalMode === 'create') {
+        console.log('[DEBUG handleSubmit] Calling urlApi.create');
+        await urlApi.create(data);
+      } else if (selectedUrl) {
+        console.log('[DEBUG handleSubmit] Calling urlApi.update with id:', selectedUrl.id);
+        await urlApi.update(selectedUrl.id, data);
+      } else {
+        console.error('[DEBUG handleSubmit] ERROR: modalMode is edit but selectedUrl is null!');
+      }
+      
       setShowModal(false);
       fetchUrls();
     } catch (err: unknown) {
       const error = err as { response?: { data?: { message?: string } } };
+      console.error('[DEBUG handleSubmit] Error:', error);
       setFormError(error.response?.data?.message || 'Gagal menyimpan URL');
     } finally {
       setFormLoading(false);

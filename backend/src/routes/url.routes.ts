@@ -238,6 +238,8 @@ export async function urlRoutes(app: FastifyInstance) {
   app.put<{ Params: URLParams; Body: UpdateUrlBody }>(
     '/:id',
     async (request: FastifyRequest<{ Params: URLParams; Body: UpdateUrlBody }>, reply: FastifyReply) => {
+      console.log('[DEBUG PUT /urls/:id] Route matched! id:', request.params.id, 'body:', JSON.stringify(request.body));
+      
       const { id } = request.params;
       const data = request.body;
       

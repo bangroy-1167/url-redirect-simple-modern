@@ -79,11 +79,11 @@ export async function authRoutes(app: FastifyInstance) {
         role: user.role,
       };
       
-      const token = jwt.sign(payload, jwtSecret, { expiresIn: expiresIn as string });
+      const token = jwt.sign(payload, jwtSecret, { expiresIn: expiresIn as jwt.SignOptions['expiresIn'] });
       const refreshToken = jwt.sign(
         { ...payload, type: 'refresh' },
         jwtSecret,
-        { expiresIn: refreshExpiresIn as string }
+        { expiresIn: refreshExpiresIn as jwt.SignOptions['expiresIn'] }
       );
       
       // Store session in database

@@ -154,7 +154,7 @@ export async function publicRoutes(app: FastifyInstance) {
       
       // Check password protection
       if (url.password) {
-        const providedPassword = request.query.pwd as string || request.headers['x-url-password'] as string;
+        const providedPassword = (request.query as { pwd?: string }).pwd || request.headers['x-url-password'] as string;
         if (!providedPassword) {
           return reply.status(401).send({
             success: false,
@@ -235,6 +235,7 @@ export async function publicRoutes(app: FastifyInstance) {
           targetUrl: true,
           title: true,
           keterangan: true,
+          description: true,
           password: true,
           expDate: true,
           isActive: true,
@@ -273,6 +274,7 @@ export async function publicRoutes(app: FastifyInstance) {
           targetUrl: url.targetUrl,
           title: url.title,
           keterangan: url.keterangan,
+          description: url.description,
           isExpired: false,
           isAvailable: true,
         },

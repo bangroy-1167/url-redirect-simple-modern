@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useSettings } from '../contexts/SettingsContext';
-import { CheckCircle, ExternalLink, Clock, AlertCircle, Copy, Check } from 'lucide-react';
+import { CheckCircle, ExternalLink, Clock, AlertCircle } from 'lucide-react';
 
 interface UrlInfo {
   id: number;
@@ -9,6 +9,7 @@ interface UrlInfo {
   targetUrl: string;
   title?: string;
   keterangan?: string;
+  description?: string;
 }
 
 export default function UrlFoundPage() {
@@ -18,7 +19,6 @@ export default function UrlFoundPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(2);
-  const [copied, setCopied] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
 
   const baseUrl = window.location.origin;
@@ -40,10 +40,13 @@ export default function UrlFoundPage() {
         const response = await fetch(`/api8url/f/${shortUrl}`);
         const data = await response.json();
         
+        console.log('[DEBUG fetchUrlInfo] Full API response:', data);
+        console.log('[DEBUG fetchUrlInfo] data.data.shortUrl:', data.data?.shortUrl);
+        console.log('[DEBUG fetchUrlInfo] data.data.title:', data.data?.title);
+        console.log('[DEBUG fetchUrlInfo] data.data.keterangan:', data.data?.keterangan);
+        
         if (data.success && data.data) {
           setUrlInfo(data.data);
-          
-          // Start countdown after info is loaded
           setTimeout(() => {
             setIsRedirecting(true);
           }, 500);
@@ -51,6 +54,7 @@ export default function UrlFoundPage() {
           setError(data.message || 'URL tidak ditemukan');
         }
       } catch (err) {
+        console.error('[DEBUG fetchUrlInfo] Fetch error:', err);
         setError('Gagal memuat informasi URL');
       } finally {
         setLoading(false);
@@ -68,7 +72,6 @@ export default function UrlFoundPage() {
       setCountdown(prev => {
         if (prev <= 1) {
           clearInterval(timer);
-          // Redirect to target URL
           window.location.href = urlInfo.targetUrl;
           return 0;
         }
@@ -79,24 +82,26 @@ export default function UrlFoundPage() {
     return () => clearInterval(timer);
   }, [loading, error, urlInfo, settings.autoRedirect]);
 
-  const copyToClipboard = async () => {
-    if (urlInfo) {
-      await navigator.clipboard.writeText(urlInfo.targetUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
-
   const manualRedirect = () => {
     if (urlInfo) {
       window.location.href = urlInfo.targetUrl;
     }
   };
 
+  // Mask URL showing only protocol://host/
+  const getMaskedUrl = (url: string) => {
+    try {
+      const parsed = new URL(url);
+      return parsed.protocol + '//' + parsed.host + '/...';
+    } catch {
+      return url.substring(0, 40) + '...';
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50 flex items-center justify-center">
-        <div className="text-center">
+        <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
           <div className="w-16 h-16 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-gray-600">Memuat...</p>
         </div>
@@ -113,16 +118,21 @@ export default function UrlFoundPage() {
           </div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">URL Tidak Ditemukan</h1>
           <p className="text-gray-600 mb-6">{error}</p>
-          <Link 
-            to="/kelola"
-            className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium"
-          >
+          <Link to="/kelola" className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium">
             Kembali ke Dashboard
           </Link>
         </div>
       </div>
     );
   }
+
+  const circumference = 2 * Math.PI * 28;
+  const progress = settings.autoRedirectDelay > 0 && countdown > 0 ? (settings.autoRedirectDelay - countdown) / settings.autoRedirectDelay : 0;
+  
+  // Debug logging
+  console.log('[DEBUG UrlFoundPage] urlInfo:', urlInfo);
+  console.log('[DEBUG UrlFoundPage] countdown:', countdown);
+  console.log('[DEBUG UrlFoundPage] isRedirecting:', isRedirecting);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-50 flex items-center justify-center p-4">
@@ -141,34 +151,23 @@ export default function UrlFoundPage() {
           <h1 className="text-2xl font-bold text-gray-900 mb-2">
             {isRedirecting ? 'Redirect dalam...' : 'URL Ditemukan!'}
           </h1>
-          {isRedirecting && (
+          {settings.autoRedirect && (
             <div className="flex justify-center gap-4 mt-4">
-              <div className="relative w-16 h-16">
-                <svg className="w-16 h-16 transform -rotate-90">
+              <div className="relative w-20 h-20">
+                <svg className="w-20 h-20 transform -rotate-90">
+                  <circle cx="40" cy="40" r="36" stroke="#e5e7eb" strokeWidth="6" fill="none" />
                   <circle
-                    cx="32"
-                    cy="32"
-                    r="28"
-                    stroke="#e5e7eb"
-                    strokeWidth="6"
-                    fill="none"
+                    cx="40" cy="40" r="36" stroke="#10b981" strokeWidth="6" fill="none"
+                    strokeDasharray={circumference}
+                    strokeDashoffset={circumference * (1 - progress)}
+                    className="transition-all duration-1000" strokeLinecap="round"
                   />
-                  <circle
-                    cx="32"
-                    cy="32"
-                    r="28"
-                    stroke="#10b981"
-                    strokeWidth="6"
-                    fill="none"
-                    strokeDasharray={`${2 * Math.PI * 28}`}
-                    strokeDashoffset={`${2 * Math.PI * 28 * (1 - (2 - countdown) / 2)}`}
-                    className="transition-all duration-1000"
-                    strokeLinecap="round"
-                  />
+                  <g transform="rotate(90 40 40)">
+                    <text x="40" y="46" textAnchor="middle" className="text-3xl font-bold fill-gray-700" dominantBaseline="middle">
+                      {countdown}
+                    </text>
+                  </g>
                 </svg>
-                <span className="absolute inset-0 flex items-center justify-center text-2xl font-bold text-gray-700">
-                  {countdown}
-                </span>
               </div>
             </div>
           )}
@@ -177,42 +176,30 @@ export default function UrlFoundPage() {
         {/* URL Info Card */}
         {urlInfo && (
           <div className="bg-gray-50 rounded-xl p-4 mb-6">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-sm text-gray-500">Short URL</span>
-              <code className="text-sm font-mono bg-white px-2 py-1 rounded border">
-                {baseUrl}/{urlInfo.shortUrl}
+            <div className="mb-3">
+              <span className="text-sm text-gray-500 block mb-2">Short URL</span>
+              <code className="text-sm font-mono text-gray-800 bg-white px-3 py-2 rounded border block overflow-x-auto">
+                {/* Use shortUrl from API, fallback to URL param */}
+                {baseUrl}/{(urlInfo as any).shortUrl || shortUrl}
               </code>
             </div>
-            {urlInfo.title && (
+            
+            {(urlInfo.title || urlInfo.keterangan || urlInfo.description) && (
               <div className="mb-3">
-                <span className="text-sm text-gray-500">Judul</span>
-                <p className="font-medium text-gray-900">{urlInfo.title}</p>
-              </div>
-            )}
-            {urlInfo.keterangan && (
-              <div className="mb-3">
-                <span className="text-sm text-gray-500">Deskripsi</span>
-                <p className="text-sm text-gray-700">{urlInfo.keterangan}</p>
-              </div>
-            )}
-            <div className="border-t pt-3">
-              <span className="text-sm text-gray-500 block mb-1">Target URL</span>
-              <div className="flex items-center gap-2">
-                <p className="text-sm text-indigo-600 truncate flex-1" title={urlInfo.targetUrl}>
-                  {urlInfo.targetUrl}
+                <span className="text-sm text-gray-500 block mb-2">Judul | Deskripsi</span>
+                <p className="text-sm text-gray-900 whitespace-pre-wrap break-words bg-white px-3 py-2 rounded border min-h-[60px]">
+                  {urlInfo.title}
+                  {urlInfo.title && (urlInfo.keterangan || urlInfo.description) ? ' | ' : ''}
+                  {urlInfo.keterangan || urlInfo.description}
                 </p>
-                <button 
-                  onClick={copyToClipboard}
-                  className="p-1.5 hover:bg-gray-200 rounded transition-colors"
-                  title="Salin URL"
-                >
-                  {copied ? (
-                    <Check className="w-4 h-4 text-green-600" />
-                  ) : (
-                    <Copy className="w-4 h-4 text-gray-500" />
-                  )}
-                </button>
               </div>
+            )}
+            
+            <div className="border-t pt-3">
+              <span className="text-sm text-gray-500 block mb-2">Target URL</span>
+              <p className="text-sm text-indigo-600 bg-white px-3 py-2 rounded border font-mono break-all">
+                {getMaskedUrl(urlInfo.targetUrl)}
+              </p>
             </div>
           </div>
         )}
@@ -239,16 +226,10 @@ export default function UrlFoundPage() {
 
         {/* Action Buttons */}
         <div className="flex gap-3">
-          <Link 
-            to="/kelola"
-            className="flex-1 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium text-center transition-colors"
-          >
+          <Link to="/kelola" className="flex-1 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium text-center transition-colors">
             Batal
           </Link>
-          <button 
-            onClick={manualRedirect}
-            className="flex-1 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium flex items-center justify-center gap-2 transition-colors"
-          >
+          <button onClick={manualRedirect} className="flex-1 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium flex items-center justify-center gap-2 transition-colors">
             <ExternalLink className="w-4 h-4" />
             Redirect Sekarang
           </button>
@@ -256,7 +237,7 @@ export default function UrlFoundPage() {
 
         {/* Footer Note */}
         <p className="text-xs text-gray-400 text-center mt-6">
-          Anda akan diarahkan ke: <span className="font-mono">{urlInfo?.targetUrl?.substring(0, 50)}...</span>
+          Anda akan diarahkan ke: {urlInfo?.targetUrl ? getMaskedUrl(urlInfo.targetUrl) : '...'}
         </p>
       </div>
     </div>
