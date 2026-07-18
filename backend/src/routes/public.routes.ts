@@ -8,6 +8,7 @@
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import QRCode from 'qrcode';
+import bcrypt from 'bcrypt';
 import prisma from '../config/database';
 import fs from 'fs';
 import path from 'path';
@@ -75,6 +76,102 @@ function renderHtml(title: string, message: string, buttonText?: string, buttonU
       modernURL8 - URL Redirection Service
     </div>
   </div>
+</body>
+</html>`;
+}
+
+// Helper function to mask password keywords in description
+function maskPasswordKeywords(text: string): string {
+  if (!text) return '';
+  
+  const passwordKeywords = [
+    'password', 'passwd', 'pwd', 'pass', 'pw', 'pswd',
+    'keyword', 'key', 'kunci', 'kata sandi', 'sandinya',
+    'secret', 'token', 'access', 'code', 'pin'
+  ];
+  
+  // Create regex pattern to find keyword (case insensitive)
+  const pattern = new RegExp(
+    `\\b(${passwordKeywords.join('|')})\\b`,
+    'gi'
+  );
+  
+  // Find the first occurrence of a password keyword
+  const match = text.match(pattern);
+  
+  if (match) {
+    // Find the position of the keyword
+    const keywordIndex = text.toLowerCase().indexOf(match[0].toLowerCase());
+    // Return text up to (but not including) the keyword
+    return text.substring(0, keywordIndex).trim();
+  }
+  
+  // No password keyword found, return full text
+  return text;
+}
+
+// Helper to render HTML page with OG meta tags for URL sharing
+function renderHtmlWithOg(ogUrl: string, ogTitle: string, ogDescription: string, appName: string, appSubtitle: string): string {
+  const fullOgTitle = ogTitle ? `${ogTitle} | ${appName}` : appName;
+  const fullOgDescription = ogDescription ? `${ogDescription}` : appSubtitle;
+  
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <!-- Open Graph / Social Media Meta Tags -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="${ogUrl}">
+  <meta property="og:title" content="${fullOgTitle}">
+  <meta property="og:description" content="${fullOgDescription}">
+  
+  <!-- Twitter Card Meta Tags -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:url" content="${ogUrl}">
+  <meta name="twitter:title" content="${fullOgTitle}">
+  <meta name="twitter:description" content="${fullOgDescription}">
+  
+  <title>${fullOgTitle}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100 flex items-center justify-center p-4">
+  <div class="max-w-lg w-full">
+    <div class="text-center mb-8">
+      <div class="inline-flex items-center justify-center w-20 h-20 bg-green-100 rounded-full mb-6">
+        <svg class="w-10 h-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+        </svg>
+      </div>
+      <h1 class="text-3xl font-bold text-gray-900 mb-4">URL Ditemukan!</h1>
+      <p class="text-lg text-gray-600 mb-2">Tautan ditemukan dan siap diakses.</p>
+      <p class="text-sm text-gray-500">Anda akan dialihkan dalam beberapa detik...</p>
+    </div>
+    <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
+      <div class="mb-4">
+        <span class="text-sm text-gray-500 block mb-1">URL Pendek</span>
+        <code class="text-sm font-mono text-indigo-600 bg-indigo-50 px-3 py-2 rounded block">${ogUrl}</code>
+      </div>
+      ${ogTitle ? `<div class="mb-4">
+        <span class="text-sm text-gray-500 block mb-1">Judul</span>
+        <p class="text-gray-900">${ogTitle}</p>
+      </div>` : ''}
+      ${ogDescription ? `<div class="mb-4">
+        <span class="text-sm text-gray-500 block mb-1">Deskripsi</span>
+        <p class="text-gray-900">${ogDescription}</p>
+      </div>` : ''}
+    </div>
+    <div class="text-center text-sm text-gray-500">
+      ${appSubtitle}
+    </div>
+  </div>
+  <script>
+    // Auto redirect after delay
+    setTimeout(function() {
+      window.location.href = "${ogUrl.replace('/f/', '/')}"; // Redirect to actual short URL for redirect
+    }, 2000);
+  </script>
 </body>
 </html>`;
 }
@@ -152,23 +249,12 @@ export async function publicRoutes(app: FastifyInstance) {
         return reply.status(410).type('text/html').send(renderHtml(title, message, buttonText, buttonUrl));
       }
       
-      // Check password protection
+      // Check password protection - redirect to SPA if password required
       if (url.password) {
-        const providedPassword = (request.query as { pwd?: string }).pwd || request.headers['x-url-password'] as string;
-        if (!providedPassword) {
-          return reply.status(401).send({
-            success: false,
-            message: 'Password required',
-            passwordProtected: true,
-          });
-        }
-        if (providedPassword !== url.password) {
-          return reply.status(401).send({
-            success: false,
-            message: 'Invalid password',
-            passwordProtected: true,
-          });
-        }
+        // Always redirect to SPA for password-protected URLs
+        // The SPA will handle password challenge
+        const baseUrl = `${request.protocol}://${request.hostname}`;
+        return reply.redirect(302, `${baseUrl}/f/${shortUrl}`);
       }
       
       // Increment hit counter
@@ -200,14 +286,59 @@ export async function publicRoutes(app: FastifyInstance) {
   );
   
   /**
-  /**
-   * GET /f/:shortUrl - Serve SPA for URL Found page
-   * This serves the React SPA so frontend can handle routing
+   * GET /f/:shortUrl - Serve SPA with OG meta tags for social sharing
+   * Returns HTML with Open Graph meta tags for proper social media preview
    */
   app.get<{ Params: RedirectParams }>(
     '/f/:shortUrl',
     async (request: FastifyRequest<{ Params: RedirectParams }>, reply: FastifyReply) => {
-      // Redirect to the SPA index - React Router will handle the route
+      const { shortUrl } = request.params;
+      const baseUrl = `${request.protocol}://${request.hostname}`;
+      const fullShortUrl = `${baseUrl}/${shortUrl.replace('f/', '')}`;
+      
+      // Fetch URL info from database
+      const url = await prisma.url8.findUnique({
+        where: { shortUrl: shortUrl.replace('f/', '') },
+        select: {
+          id: true,
+          shortUrl: true,
+          targetUrl: true,
+          title: true,
+          keterangan: true,
+          description: true,
+          password: true,
+          expDate: true,
+          isActive: true,
+        },
+      });
+      
+      // Get app settings
+      const [appName, appSubtitle] = await Promise.all([
+        getSetting('app_name', 'modernURL8'),
+        getSetting('app_subtitle', 'URL Redirection Service'),
+      ]);
+      
+      // If URL not found or inactive
+      if (!url || !url.isActive) {
+        return reply.type('text/html').send(renderHtml(
+          'URL Tidak Ditemukan',
+          'Tautan yang Anda cari tidak ditemukan atau telah dihapus.',
+          'Kembali ke Beranda',
+          baseUrl
+        ));
+      }
+      
+      // Check expiration
+      if (url.expDate && new Date(url.expDate) < new Date()) {
+        return reply.type('text/html').send(renderHtml(
+          'URL Kadaluarsa',
+          'Tautan yang Anda cari telah kadaluarsa.',
+          'Kembali ke Beranda',
+          baseUrl
+        ));
+      }
+      
+      // ALWAYS serve SPA for /f/:shortUrl - SPA handles settings and countdown
       const indexPath = path.join(process.cwd(), 'public', 'index.html');
       if (fs.existsSync(indexPath)) {
         const html = fs.readFileSync(indexPath, 'utf-8');
@@ -266,19 +397,107 @@ export async function publicRoutes(app: FastifyInstance) {
         });
       }
       
+      // Check if URL has password
+      const hasPassword = !!url.password;
+      
+      // Remove password from response for security
+      const { password: _, ...urlData } = url;
+      
       return reply.send({
         success: true,
         data: {
-          id: url.id,
-          shortUrl: url.shortUrl,
-          targetUrl: url.targetUrl,
-          title: url.title,
-          keterangan: url.keterangan,
-          description: url.description,
+          ...urlData,
+          hasPassword,
           isExpired: false,
           isAvailable: true,
         },
       });
+    }
+  );
+
+  /**
+   * POST /api8url/f/:shortUrl/verify - Verify password for protected URL
+   */
+  app.post<{ Params: RedirectParams }>(
+    `${API_PREFIX}/f/:shortUrl/verify`,
+    {
+      schema: {
+        params: { type: 'object', properties: { shortUrl: { type: 'string' } } },
+        body: { type: 'object', properties: { password: { type: 'string' } }, required: ['password'] }
+      }
+    },
+    async (request: FastifyRequest<{ Params: RedirectParams }>, reply: FastifyReply) => {
+      const { shortUrl } = request.params;
+      const { password } = request.body as { password: string };
+      
+      console.log('[DEBUG verifyPassword] Request for shortUrl:', shortUrl);
+      
+      if (!password) {
+        return reply.status(400).send({
+          success: false,
+          message: 'Password diperlukan',
+        });
+      }
+      
+      try {
+        const url = await prisma.url8.findUnique({
+          where: { shortUrl },
+          select: {
+            id: true,
+            shortUrl: true,
+            password: true,
+            isActive: true,
+            expDate: true,
+          },
+        });
+        
+        if (!url) {
+          return reply.status(404).send({
+            success: false,
+            message: 'URL tidak ditemukan',
+          });
+        }
+        
+        // Check if URL is available
+        const isExpired = url.expDate ? new Date(url.expDate) < new Date() : false;
+        if (!url.isActive || isExpired) {
+          return reply.status(410).send({
+            success: false,
+            message: isExpired ? 'URL telah kadaluarsa' : 'URL tidak aktif',
+          });
+        }
+        
+        // Verify password using bcrypt
+        if (url.password) {
+          const isValid = await bcrypt.compare(password, url.password);
+          
+          if (!isValid) {
+            console.log('[DEBUG verifyPassword] Password invalid for:', shortUrl);
+            return reply.status(401).send({
+              success: false,
+              message: 'Password salah',
+            });
+          }
+        } else {
+          // No password set, but API called - treat as invalid
+          return reply.status(401).send({
+            success: false,
+            message: 'URL tidak memerlukan password',
+          });
+        }
+        
+        console.log('[DEBUG verifyPassword] Password verified for:', shortUrl);
+        return reply.send({
+          success: true,
+          message: 'Password valid',
+        });
+      } catch (error) {
+        console.error('[DEBUG verifyPassword] Error:', error);
+        return reply.status(500).send({
+          success: false,
+          message: 'Gagal memverifikasi password',
+        });
+      }
     }
   );
 
@@ -299,8 +518,8 @@ export async function publicRoutes(app: FastifyInstance) {
           appName: settingsMap['app_name'] || 'modernURL8',
           appSubtitle: settingsMap['app_subtitle'] || 'URL Redirection Service',
           autoRedirect: settingsMap['auto_redirect'] !== 'false',
-          autoRedirectDelay: parseInt(settingsMap['auto_redirect_delay'] || '2', 10),
-          rateLimitPublic: parseInt(settingsMap['rate_limit_public'] || '20', 10),
+          autoRedirectDelay: parseInt(settingsMap['auto_redirect_delay'] || '7', 10),
+          rateLimitPublic: parseInt(settingsMap['rate_limit_public'] || '50', 10),
         },
       });
     } catch (error) {

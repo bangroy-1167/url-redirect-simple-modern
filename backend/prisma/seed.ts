@@ -36,7 +36,7 @@ async function main() {
   console.log('⚙️  Seeding default settings...');
   
   for (const setting of DEFAULT_SETTINGS) {
-    await prisma.setting.upsert({
+    await prisma.urRedirectSet.upsert({
       where: { key: setting.key },
       update: { value: setting.value },
       create: setting,
@@ -115,7 +115,7 @@ async function main() {
   const totalUrls = await prisma.url8.count();
   const totalUsers = await prisma.user.count();
   const totalHits = await prisma.urlHit.count();
-  const totalSettings = await prisma.setting.count();
+  const totalSettings = await prisma.urRedirectSet.count();
 
   console.log(`\n   📈 Total URLs: ${totalUrls}`);
   console.log(`   👥 Total Users: ${totalUsers}`);

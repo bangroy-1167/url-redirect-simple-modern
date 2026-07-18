@@ -33,12 +33,17 @@ async function buildApp() {
     },
   });
 
-  // CORS
+  // CORS - Allow all for development, static assets don't need CORS preflight
+  const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173,http://localhost:8002').split(',');
   await app.register(cors, {
     origin: (origin, cb) => {
-      const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173,http://localhost:8002').split(',');
+      // Allow requests without origin (same-origin, curl, etc.)
       if (!origin) return cb(null, true);
+      // Allow if origin matches whitelist
       if (allowedOrigins.includes(origin)) return cb(null, true);
+      // In development, allow all origins (safer for dev)
+      if (process.env.NODE_ENV === 'development') return cb(null, true);
+      // Otherwise reject
       return cb(new Error('Not allowed'), false);
     },
     credentials: true,

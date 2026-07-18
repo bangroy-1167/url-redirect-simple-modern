@@ -28,6 +28,9 @@
   ],
   "author": "ModernURL8 Team",
   "license": "MIT",
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
   "dependencies": {
     "@fastify/cors": "^9.0.1",
     "@fastify/multipart": "^8.3.0",

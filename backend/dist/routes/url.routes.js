@@ -197,7 +197,11 @@ async function urlRoutes(app) {
         }
         // Hash password if provided
         let hashedPassword;
-        if (data.password !== undefined) {
+        if (data.removePassword === true) {
+            // Explicitly remove password
+            hashedPassword = null;
+        }
+        else if (data.password !== undefined) {
             if (data.password) {
                 const bcrypt = await import('bcrypt');
                 hashedPassword = await bcrypt.hash(data.password, 12);

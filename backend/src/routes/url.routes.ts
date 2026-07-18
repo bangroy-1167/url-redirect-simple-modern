@@ -34,6 +34,7 @@ interface UpdateUrlBody {
   password?: string;
   expiresAt?: string;
   isActive?: boolean;
+  removePassword?: boolean;
 }
 
 // Generate random short URL
@@ -253,7 +254,10 @@ export async function urlRoutes(app: FastifyInstance) {
       
       // Hash password if provided
       let hashedPassword: string | null | undefined;
-      if (data.password !== undefined) {
+      if (data.removePassword === true) {
+        // Explicitly remove password
+        hashedPassword = null;
+      } else if (data.password !== undefined) {
         if (data.password) {
           const bcrypt = await import('bcrypt');
           hashedPassword = await bcrypt.hash(data.password, 12);
