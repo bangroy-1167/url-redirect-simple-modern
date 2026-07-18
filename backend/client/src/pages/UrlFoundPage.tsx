@@ -15,12 +15,13 @@ interface UrlInfo {
   hasPassword?: boolean;
   isExpired: boolean;
   isAvailable: boolean;
+  ownerLanguage?: string;
 }
 
 export default function UrlFoundPage() {
   const { shortUrl } = useParams<{ shortUrl: string }>();
   const { settings } = useSettings();
-  const { t } = useLanguage();
+  const { t, setOwnerLanguage, setIsPublicContext } = useLanguage();
   const [urlInfo, setUrlInfo] = useState<UrlInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,6 +38,14 @@ export default function UrlFoundPage() {
 
   const baseUrl = window.location.origin;
   const MAX_PASSWORD_ATTEMPTS = 3;
+
+  // Set public context when component mounts
+  useEffect(() => {
+    setIsPublicContext(true);
+    return () => {
+      setIsPublicContext(false);
+    };
+  }, [setIsPublicContext]);
 
   // Sync countdown with settings when settings loads
   useEffect(() => {
@@ -61,8 +70,14 @@ export default function UrlFoundPage() {
         console.log('[DEBUG fetchUrlInfo] data.data.keterangan:', data.data?.keterangan);
         console.log('[DEBUG fetchUrlInfo] data.data.password:', data.data?.password);
         console.log('[DEBUG fetchUrlInfo] data.data.hasPassword:', data.data?.hasPassword);
+        console.log('[DEBUG fetchUrlInfo] data.data.ownerLanguage:', data.data?.ownerLanguage);
         
         if (data.success && data.data) {
+          // Set owner's language preference for public page
+          if (data.data.ownerLanguage) {
+            setOwnerLanguage(data.data.ownerLanguage as any);
+          }
+          
           // Check if URL has password (hasPassword or password field exists)
           const hasPass = data.data.hasPassword || !!data.data.password;
           setUrlInfo({
@@ -90,7 +105,7 @@ export default function UrlFoundPage() {
     };
 
     fetchUrlInfo();
-  }, [shortUrl]);
+  }, [shortUrl, setOwnerLanguage]);
 
   // Verify password with API
   const verifyPassword = async (password: string) => {

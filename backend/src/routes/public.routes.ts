@@ -441,16 +441,15 @@ export async function publicRoutes(app: FastifyInstance) {
       
       const url = await prisma.url8.findUnique({
         where: { shortUrl },
-        select: {
-          id: true,
-          shortUrl: true,
-          targetUrl: true,
-          title: true,
-          keterangan: true,
-          description: true,
-          password: true,
-          expDate: true,
-          isActive: true,
+        include: {
+          user: {
+            select: {
+              id: true,
+              username: true,
+              email: true,
+              language: true,
+            },
+          },
         },
       });
       
@@ -484,6 +483,9 @@ export async function publicRoutes(app: FastifyInstance) {
       // Remove password from response for security
       const { password: _, ...urlData } = url;
       
+      // Get default language from settings
+      const defaultLanguage = await getSetting('default_language', 'id');
+      
       return reply.send({
         success: true,
         data: {
@@ -491,6 +493,8 @@ export async function publicRoutes(app: FastifyInstance) {
           hasPassword,
           isExpired: false,
           isAvailable: true,
+          // Include owner's language preference, fallback to app default
+          ownerLanguage: url.user?.language || defaultLanguage,
         },
       });
     }

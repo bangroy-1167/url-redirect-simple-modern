@@ -13,7 +13,13 @@ export default function AppHeader({ className = '', showLoginLink = false }: App
   const { settings } = useSettings();
   const { language, setLanguage, t, availableLanguages } = useLanguage();
   const [showLangMenu, setShowLangMenu] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // Animate in on mount
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -50,14 +56,23 @@ export default function AppHeader({ className = '', showLoginLink = false }: App
           </Link>
           
           {/* Version, Language Toggle, and Login Link */}
-          <div className="flex items-center gap-3">
-            {/* Version Badge */}
-            <span className="px-2.5 py-1 bg-gray-100 text-gray-600 text-xs font-mono rounded-full border border-gray-200">
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Version Badge - animate in progressively */}
+            <span 
+              className={`px-2 py-1 bg-gray-100 text-gray-600 text-xs font-mono rounded-full border border-gray-200 transition-all duration-300 ${
+                mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-1'
+              }`}
+            >
               {settings.appVersion}
             </span>
             
-            {/* Language Toggle */}
-            <div className="relative" ref={menuRef}>
+            {/* Language Toggle - animate in progressively after version */}
+            <div 
+              className={`relative transition-all duration-300 delay-75 ${
+                mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-1'
+              }`}
+              ref={menuRef}
+            >
               <button
                 onClick={() => setShowLangMenu(!showLangMenu)}
                 className="flex items-center gap-1.5 px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-sm font-medium rounded-lg border border-indigo-200 transition-colors"
@@ -99,7 +114,9 @@ export default function AppHeader({ className = '', showLoginLink = false }: App
             {showLoginLink && (
               <Link 
                 to="/kelola/login" 
-                className="text-sm font-medium text-indigo-600 hover:text-indigo-700 transition-colors"
+                className={`text-sm font-medium text-indigo-600 hover:text-indigo-700 transition-colors ${
+                  mounted ? 'opacity-100' : 'opacity-0'
+                }`}
               >
                 Masuk
               </Link>

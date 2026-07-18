@@ -24,6 +24,7 @@ export interface User {
   email: string;
   role: 'ADMIN' | 'USER';
   isActive: boolean;
+  language?: string; // User's preferred language
   createdAt: string;
 }
 
@@ -106,6 +107,7 @@ export interface UpdateUserRequest {
   password?: string;
   role?: 'ADMIN' | 'USER';
   isActive?: boolean;
+  language?: string;
 }
 
 export interface PaginationParams {

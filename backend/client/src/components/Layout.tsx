@@ -78,7 +78,7 @@ export default function Layout({ children, activePage }: LayoutProps) {
             {/* Desktop Actions */}
             <div className="hidden md:flex items-center gap-3">
               {/* Version Badge */}
-              <span className="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs font-mono rounded-full">
+              <span className="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs font-mono rounded-full transition-all">
                 {settings.appVersion}
               </span>
 
@@ -86,7 +86,7 @@ export default function Layout({ children, activePage }: LayoutProps) {
               <div className="relative" ref={langMenuRef}>
                 <button
                   onClick={() => setShowLangMenu(!showLangMenu)}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 rounded-lg transition-colors"
                   title="Change Language"
                 >
                   <Globe className="w-4 h-4" />

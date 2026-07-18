@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useSettings } from './SettingsContext';
+import { useAuth } from './AuthContext';
 
 type Language = 'id' | 'en' | 'de' | 'zh' | 'ja' | 'es' | 'pt' | 'fr';
 
@@ -8,6 +9,13 @@ interface LanguageContextType {
   setLanguage: (lang: Language) => void;
   t: (key: string) => string;
   availableLanguages: { code: Language; label: string; flag: string }[];
+  // For public pages - use owner's language preference
+  ownerLanguage: Language | null;
+  setOwnerLanguage: (lang: Language) => void;
+  // For determining which language to use (public vs authenticated)
+  effectiveLanguage: Language;
+  isPublicContext: boolean;
+  setIsPublicContext: (isPublic: boolean) => void;
 }
 
 const translations: Record<Language, Record<string, string>> = {
@@ -40,7 +48,6 @@ const translations: Record<Language, Record<string, string>> = {
     targetUrl: 'Target URL',
     preparing: 'Mempersiapkan redirect...',
     autoRedirectDisabled: 'Auto-redirect dinonaktifkan. Klik tombol untuk redirect.',
-    cancel: 'Batal',
     redirectNow: 'Redirect Sekarang',
     redirectingTo: 'Anda akan diarahkan ke',
     redirectInSeconds: 'Mengalihkan ke halaman tujuan dalam {seconds} detik...',
@@ -55,8 +62,40 @@ const translations: Record<Language, Record<string, string>> = {
     expiredTitle: 'Tautan Kadaluarsa',
     expiredMessage: 'URL pendek ini telah kedaluwarsa dan tidak lagi tersedia.',
     
-    // General
+    // Kelola Pages
+    dashboard: 'Dashboard',
+    urls: 'URLs',
+    users: 'Users',
+    settings: 'Pengaturan',
+    logout: 'Keluar',
+    manageUrls: 'Kelola URL',
+    createUrl: 'Buat URL',
+    editUrl: 'Edit URL',
+    deleteUrl: 'Hapus URL',
+    urlManagement: 'Manajemen URL',
+    shortUrlLabel: 'URL Pendek',
+    targetUrlLabel: 'URL Target',
+    titleLabel: 'Judul',
+    descriptionLabel: 'Deskripsi',
+    expirationLabel: 'Kedaluwarsa',
+    activeLabel: 'Aktif',
+    inactiveLabel: 'Tidak Aktif',
+    hitCountLabel: 'Jumlah Hits',
+    createdAtLabel: 'Dibuat',
+    actionsLabel: 'Aksi',
+    save: 'Simpan',
+    deleteAction: 'Hapus',
+    confirmAction: 'Konfirmasi',
+    search: 'Cari',
+    filter: 'Filter',
+    all: 'Semua',
+    noUrlsFound: 'Tidak ada URL ditemukan',
+    totalUrls: 'Total URL',
+    activeUrls: 'URL Aktif',
+    totalHits: 'Total Hits',
     backToDashboard: 'Kembali ke Dashboard',
+    changeLanguage: 'Ubah Bahasa',
+    cancelAction: 'Batal',
   },
   en: {
     loading: 'Loading...',
@@ -86,7 +125,6 @@ const translations: Record<Language, Record<string, string>> = {
     targetUrl: 'Target URL',
     preparing: 'Preparing redirect...',
     autoRedirectDisabled: 'Auto-redirect is disabled. Click the button to redirect.',
-    cancel: 'Cancel',
     redirectNow: 'Redirect Now',
     redirectingTo: 'You will be redirected to',
     redirectInSeconds: 'Redirecting to destination in {seconds} seconds...',
@@ -99,6 +137,40 @@ const translations: Record<Language, Record<string, string>> = {
     expiredTitle: 'Link Expired',
     expiredMessage: 'This short URL has expired and is no longer available.',
     backToDashboard: 'Back to Dashboard',
+    changeLanguage: 'Change Language',
+
+    // Kelola Pages
+    dashboard: 'Dashboard',
+    urls: 'URLs',
+    users: 'Users',
+    settings: 'Settings',
+    logout: 'Logout',
+    manageUrls: 'Manage URL',
+    createUrl: 'Create URL',
+    editUrl: 'Edit URL',
+    deleteUrl: 'Delete URL',
+    urlManagement: 'URL Management',
+    shortUrlLabel: 'Short URL',
+    targetUrlLabel: 'Target URL',
+    titleLabel: 'Title',
+    descriptionLabel: 'Description',
+    expirationLabel: 'Expiration',
+    activeLabel: 'Active',
+    inactiveLabel: 'Inactive',
+    hitCountLabel: 'Hit Count',
+    createdAtLabel: 'Created',
+    actionsLabel: 'Actions',
+    save: 'Save',
+    deleteAction: 'Delete',
+    confirmAction: 'Confirm',
+    search: 'Search',
+    filter: 'Filter',
+    all: 'All',
+    noUrlsFound: 'No URLs found',
+    totalUrls: 'Total URLs',
+    activeUrls: 'Active URLs',
+    totalHits: 'Total Hits',
+    cancelAction: 'Cancel',
   },
   de: {
     loading: 'Laden...',
@@ -128,7 +200,6 @@ const translations: Record<Language, Record<string, string>> = {
     targetUrl: 'Ziel-URL',
     preparing: 'Weiterleitung vorbereiten...',
     autoRedirectDisabled: 'Auto-Weiterleitung ist deaktiviert. Klicken Sie auf die Schaltfläche zur Weiterleitung.',
-    cancel: 'Abbrechen',
     redirectNow: 'Jetzt weiterleiten',
     redirectingTo: 'Sie werden weitergeleitet zu',
     redirectInSeconds: 'Weiterleitung zum Ziel in {seconds} Sekunden...',
@@ -141,6 +212,40 @@ const translations: Record<Language, Record<string, string>> = {
     expiredTitle: 'Link abgelaufen',
     expiredMessage: 'Diese Kurz-URL ist abgelaufen und nicht mehr verfügbar.',
     backToDashboard: 'Zurück zum Dashboard',
+    changeLanguage: 'Sprache ändern',
+
+    // Kelola Pages
+    dashboard: 'Dashboard',
+    urls: 'URLs',
+    users: 'Benutzer',
+    settings: 'Einstellungen',
+    logout: 'Abmelden',
+    manageUrls: 'URL verwalten',
+    createUrl: 'URL erstellen',
+    editUrl: 'URL bearbeiten',
+    deleteUrl: 'URL löschen',
+    urlManagement: 'URL-Verwaltung',
+    shortUrlLabel: 'Kurz-URL',
+    targetUrlLabel: 'Ziel-URL',
+    titleLabel: 'Titel',
+    descriptionLabel: 'Beschreibung',
+    expirationLabel: 'Ablauf',
+    activeLabel: 'Aktiv',
+    inactiveLabel: 'Inaktiv',
+    hitCountLabel: 'Zugriffe',
+    createdAtLabel: 'Erstellt',
+    actionsLabel: 'Aktionen',
+    save: 'Speichern',
+    deleteAction: 'Löschen',
+    confirmAction: 'Bestätigen',
+    search: 'Suchen',
+    filter: 'Filtern',
+    all: 'Alle',
+    noUrlsFound: 'Keine URLs gefunden',
+    totalUrls: 'Gesamte URLs',
+    activeUrls: 'Aktive URLs',
+    totalHits: 'Gesamte Zugriffe',
+    cancelAction: 'Abbrechen',
   },
   zh: {
     loading: '加载中...',
@@ -170,7 +275,6 @@ const translations: Record<Language, Record<string, string>> = {
     targetUrl: '目标URL',
     preparing: '准备重定向...',
     autoRedirectDisabled: '自动重定向已禁用。点击按钮进行重定向。',
-    cancel: '取消',
     redirectNow: '立即重定向',
     redirectingTo: '您将被重定向到',
     redirectInSeconds: '{seconds}秒后重定向到目标...',
@@ -183,6 +287,40 @@ const translations: Record<Language, Record<string, string>> = {
     expiredTitle: '链接已过期',
     expiredMessage: '此短URL已过期，不再可用。',
     backToDashboard: '返回仪表板',
+    changeLanguage: '更改语言',
+
+    // Kelola Pages
+    dashboard: '仪表板',
+    urls: '链接',
+    users: '用户',
+    settings: '设置',
+    logout: '退出',
+    manageUrls: '管理链接',
+    createUrl: '创建链接',
+    editUrl: '编辑链接',
+    deleteUrl: '删除链接',
+    urlManagement: '链接管理',
+    shortUrlLabel: '短链接',
+    targetUrlLabel: '目标链接',
+    titleLabel: '标题',
+    descriptionLabel: '描述',
+    expirationLabel: '过期时间',
+    activeLabel: '活跃',
+    inactiveLabel: '未激活',
+    hitCountLabel: '访问次数',
+    createdAtLabel: '创建时间',
+    actionsLabel: '操作',
+    save: '保存',
+    deleteAction: '删除',
+    confirmAction: '确认',
+    search: '搜索',
+    filter: '筛选',
+    all: '全部',
+    noUrlsFound: '未找到链接',
+    totalUrls: '总链接数',
+    activeUrls: '活跃链接',
+    totalHits: '总访问次数',
+    cancelAction: '取消',
   },
   ja: {
     loading: '読み込み中...',
@@ -212,19 +350,52 @@ const translations: Record<Language, Record<string, string>> = {
     targetUrl: 'ターゲットURL',
     preparing: 'リダイレクトを準備中...',
     autoRedirectDisabled: '自動リダイレクトが無効になっています。ボタンをクリックしてリダイレクトしてください。',
-    cancel: 'キャンセル',
     redirectNow: '今すぐリダイレクト',
     redirectingTo: 'リダイレクト先：',
     redirectInSeconds: '{seconds}秒後に宛先にリダイレクトします...',
     passwordFailed: '試行に失敗しました',
     welcomeTitle: 'modernURL8へようこそ',
-    welcomeMessage: 'これはURLリダイレクトサービス 입니다。有効なショートURLを使用してリダイレクトしてください。',
+    welcomeMessage: 'これはURLリダイレクトサービス です。有効なショートURLを使用してリダイレクトしてください。',
     goToHome: 'ホームページへ',
     notFoundTitle: 'リンクが見つかりません',
     notFoundMessage: '入力したショートURLは存在しないか、削除されました。URLを確認して再試行してください。',
     expiredTitle: 'リンクの有効期限が切れました',
     expiredMessage: 'このショートURLは有効期限が切れ、利用できなくなりました。',
     backToDashboard: 'ダッシュボードに戻る',
+    changeLanguage: '言語を変更',
+
+    // Kelola Pages
+    dashboard: 'ダッシュボード',
+    urls: 'URL',
+    users: 'ユーザー',
+    settings: '設定',
+    logout: 'ログアウト',
+    manageUrls: 'URL管理',
+    createUrl: 'URL作成',
+    editUrl: 'URL編集',
+    deleteUrl: 'URL削除',
+    urlManagement: 'URL管理',
+    shortUrlLabel: 'ショートURL',
+    targetUrlLabel: 'ターゲットURL',
+    titleLabel: 'タイトル',
+    descriptionLabel: '説明',
+    expirationLabel: '有効期限',
+    activeLabel: 'アクティブ',
+    inactiveLabel: '非アクティブ',
+    hitCountLabel: 'アクセス数',
+    createdAtLabel: '作成日',
+    actionsLabel: 'アクション',
+    save: '保存',
+    deleteAction: '削除',
+    confirmAction: '確認',
+    search: '検索',
+    filter: 'フィルター',
+    all: 'すべて',
+    noUrlsFound: 'URLが見つかりません',
+    totalUrls: 'URL総数',
+    activeUrls: 'アクティブURL',
+    totalHits: '総アクセス数',
+    cancelAction: 'キャンセル',
   },
   es: {
     loading: 'Cargando...',
@@ -254,7 +425,6 @@ const translations: Record<Language, Record<string, string>> = {
     targetUrl: 'URL de destino',
     preparing: 'Preparando redirección...',
     autoRedirectDisabled: 'La redirección automática está deshabilitada. Haga clic en el botón para redirigir.',
-    cancel: 'Cancelar',
     redirectNow: 'Redirigir ahora',
     redirectingTo: 'Será redirigido a',
     redirectInSeconds: 'Redirigiendo al destino en {seconds} segundos...',
@@ -267,6 +437,40 @@ const translations: Record<Language, Record<string, string>> = {
     expiredTitle: 'Enlace expirado',
     expiredMessage: 'Esta URL corta ha expirado y ya no está disponible.',
     backToDashboard: 'Volver al panel',
+    changeLanguage: 'Cambiar idioma',
+
+    // Kelola Pages
+    dashboard: 'Panel',
+    urls: 'URLs',
+    users: 'Usuarios',
+    settings: 'Configuración',
+    logout: 'Cerrar sesión',
+    manageUrls: 'Gestionar URL',
+    createUrl: 'Crear URL',
+    editUrl: 'Editar URL',
+    deleteUrl: 'Eliminar URL',
+    urlManagement: 'Gestión de URL',
+    shortUrlLabel: 'URL corta',
+    targetUrlLabel: 'URL de destino',
+    titleLabel: 'Título',
+    descriptionLabel: 'Descripción',
+    expirationLabel: 'Vencimiento',
+    activeLabel: 'Activo',
+    inactiveLabel: 'Inactivo',
+    hitCountLabel: 'Visitas',
+    createdAtLabel: 'Creado',
+    actionsLabel: 'Acciones',
+    save: 'Guardar',
+    deleteAction: 'Eliminar',
+    confirmAction: 'Confirmar',
+    search: 'Buscar',
+    filter: 'Filtrar',
+    all: 'Todos',
+    noUrlsFound: 'No se encontraron URLs',
+    totalUrls: 'Total de URLs',
+    activeUrls: 'URLs activas',
+    totalHits: 'Visitas totales',
+    cancelAction: 'Cancelar',
   },
   pt: {
     loading: 'Carregando...',
@@ -296,7 +500,6 @@ const translations: Record<Language, Record<string, string>> = {
     targetUrl: 'URL de destino',
     preparing: 'Preparando redirecionamento...',
     autoRedirectDisabled: 'O redirecionamento automático está desativado. Clique no botão para redirecionar.',
-    cancel: 'Cancelar',
     redirectNow: 'Redirecionar agora',
     redirectingTo: 'Você será redirecionado para',
     redirectInSeconds: 'Redirecionando para o destino em {seconds} segundos...',
@@ -309,6 +512,40 @@ const translations: Record<Language, Record<string, string>> = {
     expiredTitle: 'Link expirado',
     expiredMessage: 'Esta URL curta expirou e não está mais disponível.',
     backToDashboard: 'Voltar ao painel',
+    changeLanguage: 'Mudar idioma',
+
+    // Kelola Pages
+    dashboard: 'Painel',
+    urls: 'URLs',
+    users: 'Usuários',
+    settings: 'Configurações',
+    logout: 'Sair',
+    manageUrls: 'Gerenciar URL',
+    createUrl: 'Criar URL',
+    editUrl: 'Editar URL',
+    deleteUrl: 'Excluir URL',
+    urlManagement: 'Gerenciamento de URL',
+    shortUrlLabel: 'URL curta',
+    targetUrlLabel: 'URL de destino',
+    titleLabel: 'Título',
+    descriptionLabel: 'Descrição',
+    expirationLabel: 'Expiração',
+    activeLabel: 'Ativo',
+    inactiveLabel: 'Inativo',
+    hitCountLabel: 'Acessos',
+    createdAtLabel: 'Criado',
+    actionsLabel: 'Ações',
+    save: 'Salvar',
+    deleteAction: 'Excluir',
+    confirmAction: 'Confirmar',
+    search: 'Pesquisar',
+    filter: 'Filtrar',
+    all: 'Todos',
+    noUrlsFound: 'Nenhuma URL encontrada',
+    totalUrls: 'Total de URLs',
+    activeUrls: 'URLs ativas',
+    totalHits: 'Total de acessos',
+    cancelAction: 'Cancelar',
   },
   fr: {
     loading: 'Chargement...',
@@ -338,7 +575,6 @@ const translations: Record<Language, Record<string, string>> = {
     targetUrl: 'URL de destination',
     preparing: 'Préparation de la redirection...',
     autoRedirectDisabled: 'La redirection automatique est désactivée. Cliquez sur le bouton pour rediriger.',
-    cancel: 'Annuler',
     redirectNow: 'Rediriger maintenant',
     redirectingTo: 'Vous serez redirigé vers',
     redirectInSeconds: 'Redirection vers la destination dans {seconds} secondes...',
@@ -351,6 +587,40 @@ const translations: Record<Language, Record<string, string>> = {
     expiredTitle: 'Lien expiré',
     expiredMessage: 'Cette URL courte a expiré et n\'est plus disponible.',
     backToDashboard: 'Retour au tableau de bord',
+    changeLanguage: 'Changer de langue',
+
+    // Kelola Pages
+    dashboard: 'Tableau de bord',
+    urls: 'URLs',
+    users: 'Utilisateurs',
+    settings: 'Paramètres',
+    logout: 'Déconnexion',
+    manageUrls: 'Gérer les URLs',
+    createUrl: 'Créer une URL',
+    editUrl: 'Modifier l\'URL',
+    deleteUrl: 'Supprimer l\'URL',
+    urlManagement: 'Gestion des URLs',
+    shortUrlLabel: 'URL courte',
+    targetUrlLabel: 'URL cible',
+    titleLabel: 'Titre',
+    descriptionLabel: 'Description',
+    expirationLabel: 'Expiration',
+    activeLabel: 'Actif',
+    inactiveLabel: 'Inactif',
+    hitCountLabel: 'Visites',
+    createdAtLabel: 'Créé',
+    actionsLabel: 'Actions',
+    save: 'Enregistrer',
+    deleteAction: 'Supprimer',
+    confirmAction: 'Confirmer',
+    search: 'Rechercher',
+    filter: 'Filtrer',
+    all: 'Tous',
+    noUrlsFound: 'Aucune URL trouvée',
+    totalUrls: 'Total des URLs',
+    activeUrls: 'URLs actives',
+    totalHits: 'Total des visites',
+    cancelAction: 'Annuler',
   },
 };
 
@@ -370,6 +640,11 @@ const LanguageContext = createContext<LanguageContextType>({
   setLanguage: () => {},
   t: (key: string) => key,
   availableLanguages: AVAILABLE_LANGUAGES,
+  ownerLanguage: null,
+  setOwnerLanguage: () => {},
+  effectiveLanguage: 'id',
+  isPublicContext: false,
+  setIsPublicContext: () => {},
 });
 
 export function useLanguage() {
@@ -378,35 +653,78 @@ export function useLanguage() {
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const { settings } = useSettings();
+  const { user, isAuthenticated } = useAuth();
+  
+  // User's authenticated language preference (for Kelola pages)
   const [language, setLanguageState] = useState<Language>('id');
+  // Owner's language (for public pages - fetched from URL owner)
+  const [ownerLanguage, setOwnerLanguage] = useState<Language | null>(null);
+  // Flag to determine if we're in public context
+  const [isPublicContext, setIsPublicContext] = useState(false);
 
-  // Initialize language from settings on mount
+  // Determine effective language based on context
+  const effectiveLanguage = isPublicContext && ownerLanguage 
+    ? ownerLanguage 
+    : language;
+
+  // Initialize language from multiple sources (priority order)
   useEffect(() => {
     const savedLanguage = localStorage.getItem('language') as Language;
+    
     if (savedLanguage && AVAILABLE_LANGUAGES.some(l => l.code === savedLanguage)) {
       setLanguageState(savedLanguage);
+    } else if (user?.language && AVAILABLE_LANGUAGES.some(l => l.code === (user.language as Language))) {
+      // Use user's language preference from database
+      setLanguageState(user.language as Language);
     } else {
-      // Use default from settings
+      // Fall back to app default
       const defaultLang = settings.defaultLanguage as Language;
       if (AVAILABLE_LANGUAGES.some(l => l.code === defaultLang)) {
         setLanguageState(defaultLang);
       }
     }
-  }, [settings.defaultLanguage]);
+  }, [settings.defaultLanguage, user]);
 
-  // Save language preference
-  const setLanguage = (lang: Language) => {
+  // Save user's language preference to backend when authenticated
+  const setLanguage = async (lang: Language) => {
     setLanguageState(lang);
     localStorage.setItem('language', lang);
+    
+    // If user is authenticated, save to backend
+    if (isAuthenticated && user) {
+      try {
+        await fetch(`/api8url/users/${user.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          },
+          body: JSON.stringify({ language: lang }),
+        });
+      } catch (err) {
+        console.error('[LanguageContext] Failed to save language preference:', err);
+      }
+    }
   };
 
-  // Translation function
+  // Translation function using effective language
   const t = (key: string): string => {
-    return translations[language]?.[key] || translations['en']?.[key] || translations['id']?.[key] || key;
+    const langToUse = effectiveLanguage;
+    return translations[langToUse]?.[key] || translations['id']?.[key] || translations['en']?.[key] || key;
   };
 
   return (
-    <LanguageContext.Provider value={{ language, setLanguage, t, availableLanguages: AVAILABLE_LANGUAGES }}>
+    <LanguageContext.Provider value={{ 
+      language, 
+      setLanguage, 
+      t, 
+      availableLanguages: AVAILABLE_LANGUAGES,
+      ownerLanguage,
+      setOwnerLanguage,
+      effectiveLanguage,
+      isPublicContext,
+      setIsPublicContext,
+    }}>
       {children}
     </LanguageContext.Provider>
   );

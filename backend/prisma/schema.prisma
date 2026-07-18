@@ -56,6 +56,7 @@ model User {
   password  String    @db.VarChar(255) // bcrypt hashed
   role      Role      @default(USER)
   isActive  Boolean   @default(true) @map("is_active")
+  language  String    @default("id") @map("language") @db.VarChar(10) // User's preferred language code
   createdAt DateTime  @default(now()) @map("created_at") @db.DateTime(0)
   updatedAt DateTime  @updatedAt @map("updated_at") @db.DateTime(0)
 

@@ -30,6 +30,7 @@ interface UpdateUserBody {
   password?: string;
   role?: string;
   isActive?: boolean;
+  language?: string;
 }
 
 export async function adminRoutes(app: FastifyInstance) {
@@ -98,6 +99,7 @@ export async function adminRoutes(app: FastifyInstance) {
           email: true,
           role: true,
           isActive: true,
+          language: true,
           createdAt: true,
           _count: {
             select: { urls: true },
@@ -185,6 +187,7 @@ export async function adminRoutes(app: FastifyInstance) {
           email: true,
           role: true,
           isActive: true,
+          language: true,
           createdAt: true,
           _count: {
             select: { urls: true, sessions: true },
@@ -233,6 +236,7 @@ export async function adminRoutes(app: FastifyInstance) {
           ...(hashedPassword && { password: hashedPassword }),
           ...(data.role && { role: data.role as any }),
           ...(data.isActive !== undefined && { isActive: data.isActive }),
+          ...(data.language && { language: data.language }),
         },
       });
       
@@ -242,6 +246,7 @@ export async function adminRoutes(app: FastifyInstance) {
         email: user.email,
         role: user.role,
         isActive: user.isActive,
+        language: user.language,
       }, 'User updated successfully'));
     }
   );

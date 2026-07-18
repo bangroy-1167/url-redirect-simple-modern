@@ -383,16 +383,15 @@ async function publicRoutes(app) {
         const { shortUrl } = request.params;
         const url = await database_1.default.url8.findUnique({
             where: { shortUrl },
-            select: {
-                id: true,
-                shortUrl: true,
-                targetUrl: true,
-                title: true,
-                keterangan: true,
-                description: true,
-                password: true,
-                expDate: true,
-                isActive: true,
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        username: true,
+                        email: true,
+                        language: true,
+                    },
+                },
             },
         });
         if (!url) {
@@ -420,6 +419,8 @@ async function publicRoutes(app) {
         const hasPassword = !!url.password;
         // Remove password from response for security
         const { password: _, ...urlData } = url;
+        // Get default language from settings
+        const defaultLanguage = await getSetting('default_language', 'id');
         return reply.send({
             success: true,
             data: {
@@ -427,6 +428,8 @@ async function publicRoutes(app) {
                 hasPassword,
                 isExpired: false,
                 isAvailable: true,
+                // Include owner's language preference, fallback to app default
+                ownerLanguage: url.user?.language || defaultLanguage,
             },
         });
     });
@@ -521,6 +524,7 @@ async function publicRoutes(app) {
                     appName: settingsMap['app_name'] || 'modernURL8',
                     appSubtitle: settingsMap['app_subtitle'] || 'URL Redirection Service',
                     appVersion: settingsMap['app_version'] || 'v.2.09',
+                    defaultLanguage: settingsMap['default_language'] || 'id',
                     autoRedirect: settingsMap['auto_redirect'] !== 'false',
                     autoRedirectDelay: parseInt(settingsMap['auto_redirect_delay'] || '7', 10),
                     rateLimitPublic: parseInt(settingsMap['rate_limit_public'] || '50', 10),
