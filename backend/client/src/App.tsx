@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SettingsProvider } from './contexts/SettingsContext';
+import { LanguageProvider } from './contexts/LanguageContext';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import UrlsPage from './pages/UrlsPage';
@@ -48,7 +49,8 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 function AppRoutes() {
   return (
     <SettingsProvider>
-      <Routes>
+      <LanguageProvider>
+        <Routes>
         {/* Public route for URL found page with auto-redirect */}
         <Route path="/f/:shortUrl" element={<UrlFoundPage />} />
         
@@ -89,6 +91,7 @@ function AppRoutes() {
         <Route path="/" element={<Navigate to="/kelola" replace />} />
         <Route path="*" element={<Navigate to="/kelola" replace />} />
       </Routes>
+      </LanguageProvider>
     </SettingsProvider>
   );
 }

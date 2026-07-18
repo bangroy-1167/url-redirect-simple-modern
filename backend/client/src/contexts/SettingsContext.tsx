@@ -4,6 +4,7 @@ interface AppSettings {
   appName: string;
   appSubtitle: string;
   appVersion: string;
+  defaultLanguage: string;
   autoRedirect: boolean;
   autoRedirectDelay: number;
   rateLimitPublic: number;
@@ -20,6 +21,7 @@ const defaultSettings: AppSettings = {
   appName: 'modernURL8',
   appSubtitle: 'URL Redirection Service',
   appVersion: 'v.2.09',
+  defaultLanguage: 'id',
   autoRedirect: true,
   autoRedirectDelay: 15,
   rateLimitPublic: 50,

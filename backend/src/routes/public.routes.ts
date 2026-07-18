@@ -599,6 +599,7 @@ export async function publicRoutes(app: FastifyInstance) {
           appName: settingsMap['app_name'] || 'modernURL8',
           appSubtitle: settingsMap['app_subtitle'] || 'URL Redirection Service',
           appVersion: settingsMap['app_version'] || 'v.2.09',
+          defaultLanguage: settingsMap['default_language'] || 'id',
           autoRedirect: settingsMap['auto_redirect'] !== 'false',
           autoRedirectDelay: parseInt(settingsMap['auto_redirect_delay'] || '7', 10),
           rateLimitPublic: parseInt(settingsMap['rate_limit_public'] || '50', 10),

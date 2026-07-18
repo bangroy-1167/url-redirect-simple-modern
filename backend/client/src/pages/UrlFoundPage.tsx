@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useSettings } from '../contexts/SettingsContext';
+import { useLanguage } from '../contexts/LanguageContext';
 import { CheckCircle, ExternalLink, Clock, AlertCircle, Lock, Eye, EyeOff, ShieldCheck } from 'lucide-react';
 import AppHeader from '../components/AppHeader';
 
@@ -19,6 +20,7 @@ interface UrlInfo {
 export default function UrlFoundPage() {
   const { shortUrl } = useParams<{ shortUrl: string }>();
   const { settings } = useSettings();
+  const { t } = useLanguage();
   const [urlInfo, setUrlInfo] = useState<UrlInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -228,7 +230,7 @@ export default function UrlFoundPage() {
         <div className="flex-1 flex items-center justify-center">
           <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
             <div className="w-16 h-16 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-gray-600">Memuat...</p>
+            <p className="text-gray-600">{t('loading')}</p>
           </div>
         </div>
       </div>
@@ -244,10 +246,10 @@ export default function UrlFoundPage() {
             <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <AlertCircle className="w-8 h-8 text-red-600" />
             </div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">URL Tidak Ditemukan</h1>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">{t('urlNotFound')}</h1>
             <p className="text-gray-600 mb-6">{error}</p>
             <Link to="/kelola" className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium">
-              Kembali ke Dashboard
+              {t('backToDashboard')}
             </Link>
           </div>
         </div>
@@ -276,7 +278,7 @@ export default function UrlFoundPage() {
               )}
             </div>
             <h1 className="text-2xl font-bold text-gray-900 mb-2">
-              {isLocked ? 'Akses Diblokir' : 'URL Dilindungi Password'}
+              {isLocked ? t('accessBlocked') : t('passwordProtected')}
             </h1>
             
             {/* Show shortUrl and Title only */}
@@ -295,7 +297,7 @@ export default function UrlFoundPage() {
             <form onSubmit={handlePasswordSubmit} className="space-y-4">
               <div>
                 <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-                  Masukkan Password
+                  {t('enterPassword')}
                 </label>
                 <div className="relative">
                   <input
@@ -303,7 +305,7 @@ export default function UrlFoundPage() {
                     id="password"
                     value={passwordInput}
                     onChange={(e) => setPasswordInput(e.target.value)}
-                    placeholder="Masukkan password"
+                    placeholder={t('passwordPlaceholder')}
                     className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-colors"
                     disabled={verifyingPassword}
                     autoFocus
@@ -328,11 +330,11 @@ export default function UrlFoundPage() {
               {/* Attempts Indicator */}
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-500">
-                  Percobaan: {passwordAttempts}/{MAX_PASSWORD_ATTEMPTS}
+                  {t('attempts')}: {passwordAttempts}/{MAX_PASSWORD_ATTEMPTS}
                 </span>
                 <span className="text-amber-600 flex items-center gap-1">
                   <ShieldCheck className="w-4 h-4" />
-                  Password case-sensitive
+                  {t('caseSensitive')}
                 </span>
               </div>
 
@@ -344,12 +346,12 @@ export default function UrlFoundPage() {
                 {verifyingPassword ? (
                   <>
                     <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    Memverifikasi...
+                    {t('verifying')}
                   </>
                 ) : (
                   <>
                     <Lock className="w-4 h-4" />
-                    Buka Kunci
+                    {t('unlock')}
                   </>
                 )}
               </button>
@@ -359,22 +361,22 @@ export default function UrlFoundPage() {
             <div className="space-y-4">
               <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
                 <p className="text-sm text-red-800 text-center">
-                  Anda telah melebihi {MAX_PASSWORD_ATTEMPTS}x percobaan.
+                  {t('maxAttemptsReached')}
                 </p>
                 <p className="text-sm text-red-700 text-center mt-2 font-medium">
-                  💡 Tips: Password bersifat case-sensitive (huruf besar/kecil berbeda). Pastikan Caps Lock tidak aktif.
+                  💡 {t('tips')}: {t('caseSensitiveTip')}
                 </p>
               </div>
               
               <div className="text-center">
                 <p className="text-sm text-gray-500 mb-4">
-                  Hubungi pemilik tautan untuk mendapatkan password yang benar.
+                  {t('contactOwner')}
                 </p>
-                <Link 
-                  to="/kelola" 
+                <Link
+                  to="/kelola"
                   className="inline-flex items-center gap-2 px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
                 >
-                  Kembali ke Dashboard
+                  {t('backToDashboard')}
                 </Link>
               </div>
             </div>
@@ -382,7 +384,7 @@ export default function UrlFoundPage() {
 
           {/* Footer */}
           <p className="text-xs text-gray-400 text-center mt-6">
-            Akses publik • informasi ini dilindungi
+            {t('publicAccess')} • {t('protectedInfo')}
           </p>
         </div>
         </div>
@@ -416,7 +418,7 @@ export default function UrlFoundPage() {
             )}
           </div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">
-            {isRedirecting ? 'Redirect dalam...' : 'URL Ditemukan!'}
+            {isRedirecting ? t('redirecting') : t('urlFound')}
           </h1>
           {settings.autoRedirect && (
             <div className="flex justify-center gap-4 mt-4">
@@ -444,7 +446,7 @@ export default function UrlFoundPage() {
         {urlInfo && (
           <div className="bg-gray-50 rounded-xl p-4 mb-6 space-y-3">
             <div>
-              <span className="text-sm text-gray-500 block mb-2">Short URL</span>
+              <span className="text-sm text-gray-500 block mb-2">{t('shortUrl')}</span>
               <code className="text-sm font-mono text-gray-800 bg-white px-3 py-2 rounded border block break-all word-break-all">
                 {baseUrl}/{(urlInfo as any).shortUrl || shortUrl}
               </code>
@@ -453,7 +455,7 @@ export default function UrlFoundPage() {
             {/* Combined Judul + Keterangan/Deskripsi dengan masking password */}
             {getCombinedInfo() && (
               <div>
-                <span className="text-sm text-gray-500 block mb-2">Informasi Link</span>
+                <span className="text-sm text-gray-500 block mb-2">{t('linkInfo')}</span>
                 <p className="text-sm text-gray-900 bg-white px-3 py-2 rounded border min-h-[40px] break-words whitespace-pre-wrap">
                   {getCombinedInfo()}
                 </p>
@@ -461,7 +463,7 @@ export default function UrlFoundPage() {
             )}
             
             <div className="border-t pt-3">
-              <span className="text-sm text-gray-500 block mb-2">Target URL</span>
+              <span className="text-sm text-gray-500 block mb-2">{t('targetUrl')}</span>
               <p className="text-sm text-indigo-600 bg-white px-3 py-2 rounded border font-mono break-all word-break-all leading-relaxed">
                 {getMaskedUrl(urlInfo.targetUrl)}
               </p>
@@ -475,16 +477,16 @@ export default function UrlFoundPage() {
             isRedirecting ? (
               <p className="text-sm text-gray-500 flex items-center justify-center gap-2">
                 <Clock className="w-4 h-4" />
-                Mengalihkan ke halaman tujuan dalam {countdown} detik...
+                {t('redirectInSeconds').replace('{seconds}', String(countdown))}
               </p>
             ) : (
               <p className="text-sm text-gray-500">
-                Mempersiapkan redirect...
+                {t('preparing')}
               </p>
             )
           ) : (
             <p className="text-sm text-gray-500">
-              Auto-redirect dinonaktifkan. Klik tombol untuk redirect.
+              {t('autoRedirectDisabled')}
             </p>
           )}
         </div>
@@ -492,17 +494,17 @@ export default function UrlFoundPage() {
         {/* Action Buttons */}
         <div className="flex gap-3">
           <Link to="/kelola" className="flex-1 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium text-center transition-colors">
-            Batal
+            {t('cancel')}
           </Link>
           <button onClick={manualRedirect} className="flex-1 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium flex items-center justify-center gap-2 transition-colors">
             <ExternalLink className="w-4 h-4" />
-            Redirect Sekarang
+            {t('redirectNow')}
           </button>
         </div>
 
         {/* Footer Note */}
         <p className="text-xs text-gray-400 text-center mt-6 break-words">
-          Anda akan diarahkan ke: <span className="font-mono">{urlInfo?.targetUrl ? getMaskedUrl(urlInfo.targetUrl) : '...'}</span>
+          {t('redirectingTo')}: <span className="font-mono">{urlInfo?.targetUrl ? getMaskedUrl(urlInfo.targetUrl) : '...'}</span>
         </p>
       </div>
       </div>
