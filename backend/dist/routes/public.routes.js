@@ -17,6 +17,51 @@ const database_1 = __importDefault(require("../config/database"));
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const API_PREFIX = process.env.API_PREFIX || '/api8url';
+// User agent parsing helper
+function parseUserAgent(userAgent) {
+    const ua = userAgent.toLowerCase();
+    // Detect device type (Prisma enum uses uppercase)
+    let deviceType = 'DESKTOP';
+    if (/mobile|android|iphone|ipad|ipod|blackberry|windows phone/i.test(ua)) {
+        if (/tablet|ipad/i.test(ua)) {
+            deviceType = 'TABLET';
+        }
+        else {
+            deviceType = 'MOBILE';
+        }
+    }
+    // Detect browser
+    let browser = 'Unknown';
+    if (/edg\/|edge/i.test(ua))
+        browser = 'Edge';
+    else if (/chrome\/|chromium/i.test(ua))
+        browser = 'Chrome';
+    else if (/safari/i.test(ua))
+        browser = 'Safari';
+    else if (/firefox/i.test(ua))
+        browser = 'Firefox';
+    else if (/opera|oprogen/i.test(ua))
+        browser = 'Opera';
+    else if (/msie|trident/i.test(ua))
+        browser = 'Internet Explorer';
+    // Detect OS
+    let os = 'Unknown';
+    if (/windows nt 10/i.test(ua))
+        os = 'Windows 10';
+    else if (/windows nt 11/i.test(ua))
+        os = 'Windows 11';
+    else if (/windows nt/i.test(ua))
+        os = 'Windows';
+    else if (/mac os x/i.test(ua))
+        os = 'macOS';
+    else if (/iphone|ipad|ipod/i.test(ua))
+        os = 'iOS';
+    else if (/android/i.test(ua))
+        os = 'Android';
+    else if (/linux/i.test(ua))
+        os = 'Linux';
+    return { deviceType, browser, os };
+}
 // Default messages (fallback if not in database)
 const DEFAULT_MESSAGES = {
     welcomeTitle: 'Welcome to modernURL8',
@@ -39,11 +84,14 @@ async function getSetting(key, fallback) {
         return fallback;
     }
 }
-// Helper to render HTML page
-function renderHtml(title, message, buttonText, buttonUrl) {
+// Helper to render HTML page with app branding
+function renderHtml(title, message, buttonText, buttonUrl, appName, appSubtitle, appVersion) {
     const button = buttonText && buttonUrl
         ? `<a href="${buttonUrl}" class="inline-flex items-center px-6 py-3 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition">${buttonText}</a>`
         : '';
+    const branding = appName || 'modernURL8';
+    const subtitle = appSubtitle || 'URL Redirection Service';
+    const version = appVersion || 'v.2.09';
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -52,20 +100,40 @@ function renderHtml(title, message, buttonText, buttonUrl) {
   <title>${title}</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4">
-  <div class="max-w-md w-full">
-    <div class="text-center mb-8">
-      <div class="inline-flex items-center justify-center w-20 h-20 bg-indigo-100 rounded-full mb-6">
-        <svg class="w-10 h-10 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
-        </svg>
+<body class="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col">
+  <!-- App Header -->
+  <header class="bg-white/80 backdrop-blur-sm border-b border-gray-200">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
+            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+            </svg>
+          </div>
+          <div class="flex flex-col">
+            <span class="text-lg font-bold text-gray-900 leading-tight">${branding}</span>
+            <span class="text-xs text-gray-500 leading-tight hidden sm:block">${subtitle}</span>
+          </div>
+        </div>
+        <span class="px-2.5 py-1 bg-gray-100 text-gray-600 text-xs font-mono rounded-full border border-gray-200">${version}</span>
       </div>
-      <h1 class="text-3xl font-bold text-gray-900 mb-4">${title}</h1>
-      <p class="text-lg text-gray-600 mb-8">${message}</p>
-      ${button}
     </div>
-    <div class="text-center text-sm text-gray-400">
-      modernURL8 - URL Redirection Service
+  </header>
+  
+  <!-- Main Content -->
+  <div class="flex-1 flex items-center justify-center p-4">
+    <div class="max-w-md w-full">
+      <div class="text-center mb-8">
+        <div class="inline-flex items-center justify-center w-20 h-20 bg-indigo-100 rounded-full mb-6">
+          <svg class="w-10 h-10 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+          </svg>
+        </div>
+        <h1 class="text-3xl font-bold text-gray-900 mb-4">${title}</h1>
+        <p class="text-lg text-gray-600 mb-8">${message}</p>
+        ${button}
+      </div>
     </div>
   </div>
 </body>
@@ -162,13 +230,16 @@ async function publicRoutes(app) {
      * GET / - Welcome page (root URL)
      */
     app.get('/', async (request, reply) => {
-        const [title, message, buttonText, buttonUrl] = await Promise.all([
+        const [title, message, buttonText, buttonUrl, appName, appSubtitle, appVersion] = await Promise.all([
             getSetting('welcome_title', DEFAULT_MESSAGES.welcomeTitle),
             getSetting('welcome_message', DEFAULT_MESSAGES.welcomeMessage),
             getSetting('welcome_button_text', DEFAULT_MESSAGES.welcomeButtonText),
             getSetting('welcome_home_url', DEFAULT_MESSAGES.welcomeHomeUrl),
+            getSetting('app_name', 'modernURL8'),
+            getSetting('app_subtitle', 'URL Redirection Service'),
+            getSetting('app_version', 'v.2.09'),
         ]);
-        return reply.type('text/html').send(renderHtml(title, message, buttonText, buttonUrl));
+        return reply.type('text/html').send(renderHtml(title, message, buttonText, buttonUrl, appName, appSubtitle, appVersion));
     });
     /**
      * GET /:shortUrl - Show URL Found page, then redirect
@@ -198,23 +269,29 @@ async function publicRoutes(app) {
         });
         // URL not found - show friendly page
         if (!url || !url.isActive) {
-            const [title, message, buttonText, buttonUrl] = await Promise.all([
+            const [title, message, buttonText, buttonUrl, appName, appSubtitle, appVersion] = await Promise.all([
                 getSetting('notfound_title', DEFAULT_MESSAGES.notFoundTitle),
                 getSetting('notfound_message', DEFAULT_MESSAGES.notFoundMessage),
                 getSetting('notfound_button_text', DEFAULT_MESSAGES.notFoundButtonText),
                 getSetting('notfound_home_url', DEFAULT_MESSAGES.welcomeHomeUrl),
+                getSetting('app_name', 'modernURL8'),
+                getSetting('app_subtitle', 'URL Redirection Service'),
+                getSetting('app_version', 'v.2.09'),
             ]);
-            return reply.status(404).type('text/html').send(renderHtml(title, message, buttonText, buttonUrl));
+            return reply.status(404).type('text/html').send(renderHtml(title, message, buttonText, buttonUrl, appName, appSubtitle, appVersion));
         }
         // Check expiration
         if (url.expDate && new Date(url.expDate) < new Date()) {
-            const [title, message, buttonText, buttonUrl] = await Promise.all([
+            const [title, message, buttonText, buttonUrl, appName, appSubtitle, appVersion] = await Promise.all([
                 getSetting('expired_title', DEFAULT_MESSAGES.expiredTitle),
                 getSetting('expired_message', DEFAULT_MESSAGES.expiredMessage),
                 getSetting('expired_button_text', DEFAULT_MESSAGES.notFoundButtonText),
                 getSetting('expired_home_url', DEFAULT_MESSAGES.welcomeHomeUrl),
+                getSetting('app_name', 'modernURL8'),
+                getSetting('app_subtitle', 'URL Redirection Service'),
+                getSetting('app_version', 'v.2.09'),
             ]);
-            return reply.status(410).type('text/html').send(renderHtml(title, message, buttonText, buttonUrl));
+            return reply.status(410).type('text/html').send(renderHtml(title, message, buttonText, buttonUrl, appName, appSubtitle, appVersion));
         }
         // Check password protection - redirect to SPA if password required
         if (url.password) {
@@ -228,15 +305,20 @@ async function publicRoutes(app) {
             where: { id: url.id },
             data: { hitCounter: { increment: 1 } },
         });
-        // Log hit for analytics
+        // Log hit for analytics with enriched data
         try {
+            const userAgent = request.headers['user-agent'] || '';
+            const { deviceType, browser, os } = parseUserAgent(userAgent);
             await database_1.default.urlHit.create({
                 data: {
                     urlId: url.id,
                     shortUrl: url.shortUrl,
                     ipAddress: request.ip,
-                    userAgent: request.headers['user-agent'] || null,
+                    userAgent: userAgent || null,
                     referer: request.headers['referer'] || null,
+                    deviceType,
+                    browser,
+                    os,
                 },
             });
         }
@@ -272,206 +354,26 @@ async function publicRoutes(app) {
             },
         });
         // Get app settings
-        const [appName, appSubtitle] = await Promise.all([
+        const [appName, appSubtitle, appVersion] = await Promise.all([
             getSetting('app_name', 'modernURL8'),
             getSetting('app_subtitle', 'URL Redirection Service'),
+            getSetting('app_version', 'v.2.09'),
         ]);
         // If URL not found or inactive
         if (!url || !url.isActive) {
-            return reply.type('text/html').send(renderHtml('URL Tidak Ditemukan', 'Tautan yang Anda cari tidak ditemukan atau telah dihapus.', 'Kembali ke Beranda', baseUrl));
+            return reply.type('text/html').send(renderHtml('URL Tidak Ditemukan', 'Tautan yang Anda cari tidak ditemukan atau telah dihapus.', 'Kembali ke Beranda', baseUrl, appName, appSubtitle, appVersion));
         }
         // Check expiration
         if (url.expDate && new Date(url.expDate) < new Date()) {
-            return reply.type('text/html').send(renderHtml('URL Kadaluarsa', 'Tautan yang Anda cari telah kadaluarsa.', 'Kembali ke Beranda', baseUrl));
+            return reply.type('text/html').send(renderHtml('URL Kadaluarsa', 'Tautan yang Anda cari telah kadaluarsa.', 'Kembali ke Beranda', baseUrl, appName, appSubtitle, appVersion));
         }
-        // If password protected, serve SPA (SPA handles password challenge)
-        if (url.password) {
-            const indexPath = path_1.default.join(process.cwd(), 'public', 'index.html');
-            if (fs_1.default.existsSync(indexPath)) {
-                const html = fs_1.default.readFileSync(indexPath, 'utf-8');
-                return reply.type('text/html').send(html);
-            }
-            return reply.status(404).send('Not found');
+        // ALWAYS serve SPA for /f/:shortUrl - SPA handles settings and countdown
+        const indexPath = path_1.default.join(process.cwd(), 'public', 'index.html');
+        if (fs_1.default.existsSync(indexPath)) {
+            const html = fs_1.default.readFileSync(indexPath, 'utf-8');
+            return reply.type('text/html').send(html);
         }
-        // Generate OG meta tags
-        const ogTitle = url.title || url.keterangan || 'Tautan';
-        const ogDescription = maskPasswordKeywords(url.description || url.keterangan || '');
-        const finalOgDescription = ogDescription ? `${ogDescription} | ${appSubtitle}` : appSubtitle;
-        // Serve HTML with OG meta tags
-        const htmlContent = `<!DOCTYPE html>
-<html lang="id">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  
-  <!-- Open Graph / Social Media Meta Tags -->
-  <meta property="og:type" content="website">
-  <meta property="og:url" content="${fullShortUrl}">
-  <meta property="og:title" content="${ogTitle}">
-  <meta property="og:description" content="${finalOgDescription}">
-  
-  <!-- Twitter Card Meta Tags -->
-  <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:url" content="${fullShortUrl}">
-  <meta name="twitter:title" content="${ogTitle}">
-  <meta name="twitter:description" content="${finalOgDescription}">
-  
-  <title>${ogTitle} | ${appName}</title>
-  
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-      min-height: 100vh;
-      background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 1rem;
-    }
-    .card {
-      background: white;
-      border-radius: 1rem;
-      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.1);
-      padding: 2rem;
-      max-width: 32rem;
-      width: 100%;
-      text-align: center;
-    }
-    .icon {
-      width: 5rem;
-      height: 5rem;
-      background: #d1fae5;
-      border-radius: 9999px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin: 0 auto 1.5rem;
-    }
-    .icon svg {
-      width: 2.5rem;
-      height: 2.5rem;
-      color: #059669;
-    }
-    h1 {
-      font-size: 1.875rem;
-      font-weight: 700;
-      color: #111827;
-      margin-bottom: 0.5rem;
-    }
-    .subtitle {
-      color: #6b7280;
-      font-size: 0.875rem;
-      margin-bottom: 1.5rem;
-    }
-    .url-box {
-      background: #f3f4f6;
-      border-radius: 0.5rem;
-      padding: 1rem;
-      margin-bottom: 1.5rem;
-    }
-    .url-label {
-      font-size: 0.75rem;
-      color: #9ca3af;
-      margin-bottom: 0.25rem;
-    }
-    .url-value {
-      font-family: ui-monospace, monospace;
-      color: #4f46e5;
-      font-weight: 500;
-      word-break: break-all;
-    }
-    .description {
-      color: #374151;
-      font-size: 0.875rem;
-      margin-bottom: 1.5rem;
-      line-height: 1.5;
-    }
-    .footer {
-      color: #9ca3af;
-      font-size: 0.75rem;
-    }
-    .auto-redirect {
-      color: #6b7280;
-      font-size: 0.875rem;
-      margin-top: 1rem;
-    }
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0.75rem 1.5rem;
-      background: #4f46e5;
-      color: white;
-      border-radius: 0.5rem;
-      font-weight: 500;
-      text-decoration: none;
-      transition: background 0.2s;
-    }
-    .btn:hover {
-      background: #4338ca;
-    }
-    .btn-secondary {
-      background: #e5e7eb;
-      color: #374151;
-    }
-    .btn-secondary:hover {
-      background: #d1d5db;
-    }
-    .buttons {
-      display: flex;
-      gap: 0.75rem;
-      justify-content: center;
-      flex-wrap: wrap;
-    }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <div class="icon">
-      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
-      </svg>
-    </div>
-    
-    <h1>Tautan Ditemukan!</h1>
-    <p class="subtitle">Anda akan dialihkan dalam beberapa detik...</p>
-    
-    <div class="url-box">
-      <div class="url-label">URL Pendek</div>
-      <div class="url-value">${fullShortUrl}</div>
-    </div>
-    
-    ${url.title || url.keterangan ? `
-    <div class="description">
-      <strong>Judul:</strong> ${url.title || url.keterangan}
-    </div>
-    ` : ''}
-    
-    <div class="buttons">
-      <a href="${url.targetUrl}" class="btn">
-        Buka Tautan
-        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
-        </svg>
-      </a>
-      <a href="${baseUrl}" class="btn btn-secondary">Kembali</a>
-    </div>
-    
-    <p class="footer">${appSubtitle}</p>
-    
-    <p class="auto-redirect">Mengalihkan otomatis...</p>
-  </div>
-  
-  <script>
-    // Auto redirect after delay
-    setTimeout(function() {
-      window.location.href = "${url.targetUrl}";
-    }, 3000);
-  </script>
-</body>
-</html>`;
-        return reply.type('text/html').send(htmlContent);
+        return reply.status(404).send('Not found');
     });
     /**
      * GET /api8url/f/:shortUrl - URL Found page info (for frontend redirect page)
@@ -618,6 +520,7 @@ async function publicRoutes(app) {
                 data: {
                     appName: settingsMap['app_name'] || 'modernURL8',
                     appSubtitle: settingsMap['app_subtitle'] || 'URL Redirection Service',
+                    appVersion: settingsMap['app_version'] || 'v.2.09',
                     autoRedirect: settingsMap['auto_redirect'] !== 'false',
                     autoRedirectDelay: parseInt(settingsMap['auto_redirect_delay'] || '7', 10),
                     rateLimitPublic: parseInt(settingsMap['rate_limit_public'] || '50', 10),

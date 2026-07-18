@@ -87,14 +87,12 @@ export async function analyticsRoutes(app: FastifyInstance) {
   app.get<{ Params: AnalyticsParams }>(
     '/urls/:id',
     async (request: FastifyRequest<{ Params: AnalyticsParams }>, reply: FastifyReply) => {
-      const user = (request as any).user;
       const { id } = request.params;
       
-      // Get URL (verify ownership)
-      const url = await prisma.url8.findFirst({
+      // Get URL (no ownership check - admin/owner can view)
+      const url = await prisma.url8.findUnique({
         where: {
           id: parseInt(id, 10),
-          userId: user.userId,
         },
       });
       
@@ -102,8 +100,8 @@ export async function analyticsRoutes(app: FastifyInstance) {
         return reply.status(404).send(fail('URL not found'));
       }
       
-      // Get detailed stats
-      const [hitsByDay, topReferrers, deviceBreakdown, recentHits] = await Promise.all([
+      // Get detailed stats with comprehensive analytics
+      const [hitsByDay, topReferrers, deviceBreakdown, browserBreakdown, osBreakdown, hourlyDist, recentHits] = await Promise.all([
         // Hits by day (last 30 days)
         prisma.$queryRaw`
           SELECT DATE(created_at) as date, COUNT(*) as count
@@ -123,24 +121,52 @@ export async function analyticsRoutes(app: FastifyInstance) {
           ORDER BY count DESC
           LIMIT 10
         `,
-        // Device breakdown
+        // Device breakdown with counts
         prisma.$queryRaw`
           SELECT device_type, COUNT(*) as count
           FROM url_hits
           WHERE url_id = ${url.id}
           GROUP BY device_type
         `,
-        // Recent hits (last 20)
+        // Browser breakdown
+        prisma.$queryRaw`
+          SELECT browser, COUNT(*) as count
+          FROM url_hits
+          WHERE url_id = ${url.id}
+          AND browser IS NOT NULL
+          GROUP BY browser
+          ORDER BY count DESC
+        `,
+        // OS breakdown
+        prisma.$queryRaw`
+          SELECT os, COUNT(*) as count
+          FROM url_hits
+          WHERE url_id = ${url.id}
+          AND os IS NOT NULL
+          GROUP BY os
+          ORDER BY count DESC
+        `,
+        // Hourly distribution
+        prisma.$queryRaw`
+          SELECT HOUR(created_at) as hour, COUNT(*) as count
+          FROM url_hits
+          WHERE url_id = ${url.id}
+          GROUP BY HOUR(created_at)
+          ORDER BY hour ASC
+        `,
+        // Recent hits (last 50)
         prisma.urlHit.findMany({
           where: { urlId: url.id },
           orderBy: { createdAt: 'desc' },
-          take: 20,
+          take: 50,
           select: {
+            id: true,
             ipAddress: true,
             referer: true,
             deviceType: true,
             browser: true,
             os: true,
+            country: true,
             createdAt: true,
           },
         }),
@@ -153,21 +179,65 @@ export async function analyticsRoutes(app: FastifyInstance) {
         _count: true,
       });
       
+      // Format device breakdown
+      const byDevice: Record<string, number> = {};
+      if (Array.isArray(deviceBreakdown)) {
+        deviceBreakdown.forEach((d: any) => {
+          byDevice[d.device_type?.toLowerCase() || 'other'] = Number(d.count);
+        });
+      }
+      
+      // Format browser breakdown
+      const byBrowser: Record<string, number> = {};
+      if (Array.isArray(browserBreakdown)) {
+        browserBreakdown.forEach((b: any) => {
+          if (b.browser) byBrowser[b.browser] = Number(b.count);
+        });
+      }
+      
+      // Format OS breakdown
+      const byOs: Record<string, number> = {};
+      if (Array.isArray(osBreakdown)) {
+        osBreakdown.forEach((o: any) => {
+          if (o.os) byOs[o.os] = Number(o.count);
+        });
+      }
+      
+      // Format referrers
+      const byReferer: Record<string, number> = {};
+      if (Array.isArray(topReferrers)) {
+        topReferrers.forEach((r: any) => {
+          byReferer[r.referer || '(Direct)'] = Number(r.count);
+        });
+      }
+      
+      // Format hourly distribution
+      const byHour: Record<number, number> = {};
+      if (Array.isArray(hourlyDist)) {
+        hourlyDist.forEach((h: any) => {
+          byHour[Number(h.hour)] = Number(h.count);
+        });
+      }
+      
       return reply.send(ok({
         url: {
           id: url.id,
           shortUrl: url.shortUrl,
           title: url.title,
+          targetUrl: url.targetUrl,
           hitCounter: url.hitCounter,
+          createdAt: url.createdAt,
         },
         stats: {
           totalHits: url.hitCounter,
           uniqueVisitors: uniqueVisitors.length,
           avgHitsPerDay: url.hitCounter / 30,
         },
-        hitsByDay,
-        topReferrers,
-        deviceBreakdown,
+        byDevice,
+        byBrowser,
+        byOs,
+        byReferer,
+        byHour,
         recentHits,
       }, 'Success'));
     }

@@ -49,7 +49,7 @@ function AppRoutes() {
   return (
     <SettingsProvider>
       <Routes>
-        {/* public route for URL found page with auto-redirect */}
+        {/* Public route for URL found page with auto-redirect */}
         <Route path="/f/:shortUrl" element={<UrlFoundPage />} />
         
         <Route path="/kelola/login" element={<LoginPage />} />

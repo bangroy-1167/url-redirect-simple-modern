@@ -3,6 +3,7 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 interface AppSettings {
   appName: string;
   appSubtitle: string;
+  appVersion: string;
   autoRedirect: boolean;
   autoRedirectDelay: number;
   rateLimitPublic: number;
@@ -18,6 +19,7 @@ interface SettingsContextType {
 const defaultSettings: AppSettings = {
   appName: 'modernURL8',
   appSubtitle: 'URL Redirection Service',
+  appVersion: 'v.2.09',
   autoRedirect: true,
   autoRedirectDelay: 15,
   rateLimitPublic: 50,

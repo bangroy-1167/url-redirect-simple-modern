@@ -7,12 +7,13 @@ import Layout from '../components/Layout';
 import Pagination from '../components/Pagination';
 import {
   Plus, Search, X, Copy, Check, ExternalLink, Pencil, Trash2, AlertCircle, AlertTriangle, Sparkles, Lightbulb,
-  ChevronUp, ChevronDown, Link2, Calendar, MessageSquare, FileText, Users, Presentation, Share2, Lock
+  ChevronUp, ChevronDown, Link2, Calendar, MessageSquare, FileText, Users, Presentation, Share2, Lock,
+  RotateCcw, BarChart3, Globe, Monitor, Smartphone, Tablet, Clock, MapPin, TrendingUp
 } from 'lucide-react';
 
 // Safe characters for short URL - human-friendly mix
 const SHORTURL_SAFE_CHARS = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789';
-const SHORTURL_ALL_CHARS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-';
+const SHORTURL_ALL_CHARS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_';
 
 // Generate random short URL using safe chars
 function generateShortUrl(): string {
@@ -57,6 +58,15 @@ export default function UrlsPage() {
   const [showCharInfo, setShowCharInfo] = useState(false);
   const [showDescInfo, setShowDescInfo] = useState(false);
   
+  // Duplicate shortURL dialog state
+  const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
+  const [duplicateShortUrl, setDuplicateShortUrl] = useState<{
+    existingId: number;
+    existingShortUrl: string;
+    newShortUrl: string;
+    newData: Record<string, unknown>;
+  } | null>(null);
+  
   // WhatsApp share modal states
   const [showShareModal, setShowShareModal] = useState(false);
   const [shareUrlData, setShareUrlData] = useState<Url8 | null>(null);
@@ -67,6 +77,12 @@ export default function UrlsPage() {
   
   // Copy target URL state
   const [copiedTargetId, setCopiedTargetId] = useState<number | null>(null);
+  
+  // Hit Analysis Modal state
+  const [showHitAnalysis, setShowHitAnalysis] = useState(false);
+  const [hitAnalysisUrl, setHitAnalysisUrl] = useState<Url8 | null>(null);
+  const [hitAnalysisData, setHitAnalysisData] = useState<any>(null);
+  const [hitAnalysisLoading, setHitAnalysisLoading] = useState(false);
   
   // Format date to Indonesian
   const formatDateIndonesian = (dateStr: string) => {
@@ -186,6 +202,9 @@ ${fullUrl}
     setShowDescInfo(false);
     setRemovePassword(false);
     setOriginalHasPassword(false);
+    // Clear duplicate dialog states
+    setShowDuplicateDialog(false);
+    setDuplicateShortUrl(null);
   };
 
   const openEditModal = (url: Url8) => {
@@ -206,9 +225,19 @@ ${fullUrl}
     setShowModal(true);
     setShowConfirmClose(false);
     setShowCharInfo(false);
+    setShowDescInfo(false);
     // Track if URL originally had password
     setOriginalHasPassword(!!url.password);
     setRemovePassword(false);
+    // Clear duplicate dialog states
+    setShowDuplicateDialog(false);
+    setDuplicateShortUrl(null);
+  };
+
+  // Check if shortUrl changed (case-insensitive)
+  const hasShortUrlChanged = () => {
+    if (!selectedUrl || !formData.shortUrl) return false;
+    return formData.shortUrl.toLowerCase() !== selectedUrl.shortUrl.toLowerCase();
   };
 
   const handleGenerateShortUrl = () => {
@@ -221,7 +250,7 @@ ${fullUrl}
   };
 
   const handleShortUrlChange = (value: string) => {
-    const filtered = value.replace(/[^a-zA-Z0-9-]/g, '');
+    const filtered = value.replace(/[^a-zA-Z0-9-_]/g, '');
     setFormData(prev => ({ ...prev, shortUrl: filtered }));
   };
 
@@ -245,28 +274,86 @@ ${fullUrl}
         data.removePassword = true;
       }
       
-      // DEBUG: Log the submission details
-      console.log('[DEBUG handleSubmit] modalMode:', modalMode);
-      console.log('[DEBUG handleSubmit] selectedUrl:', selectedUrl);
-      console.log('[DEBUG handleSubmit] formData.shortUrl:', formData.shortUrl);
-      console.log('[DEBUG handleSubmit] data:', data);
+      // Check if shortUrl changed in edit mode (case-insensitive)
+      if (modalMode === 'edit' && selectedUrl && hasShortUrlChanged()) {
+        const confirmed = window.confirm(
+          `Short URL berubah dari "${selectedUrl.shortUrl}" menjadi "${formData.shortUrl}"\n\n` +
+          `Apakah Anda ingin menyimpan sebagai URL baru?\n\n` +
+          `• Klik OK untuk buat URL baru\n` +
+          `• Klik Batal untuk membatalkan`
+        );
+        
+        if (confirmed) {
+          // Create new URL with new shortUrl
+          console.log('[DEBUG handleSubmit] Creating new URL with shortUrl:', formData.shortUrl);
+          await urlApi.create(data);
+          setShowModal(false);
+          fetchUrls();
+          setFormLoading(false);
+          return;
+        } else {
+          // User cancelled - keep modal open
+          setFormLoading(false);
+          return;
+        }
+      }
       
       if (modalMode === 'create') {
-        console.log('[DEBUG handleSubmit] Calling urlApi.create');
         await urlApi.create(data);
       } else if (selectedUrl) {
-        console.log('[DEBUG handleSubmit] Calling urlApi.update with id:', selectedUrl.id);
         await urlApi.update(selectedUrl.id, data);
-      } else {
-        console.error('[DEBUG handleSubmit] ERROR: modalMode is edit but selectedUrl is null!');
       }
       
       setShowModal(false);
       fetchUrls();
     } catch (err: unknown) {
-      const error = err as { response?: { data?: { message?: string } } };
-      console.error('[DEBUG handleSubmit] Error:', error);
-      setFormError(error.response?.data?.message || 'Gagal menyimpan URL');
+      const error = err as { response?: { data?: { message?: string; error?: string; duplicateOf?: number } }; status?: number };
+      console.error('[DEBUG handleSubmit] Error:', err);
+      
+      // Build data object for potential duplicate handling
+      const data: Record<string, unknown> = {
+        targetUrl: formData.targetUrl,
+        title: formData.title,
+        description: formData.description || formData.keterangan,
+        keterangan: formData.keterangan
+      };
+      if (formData.shortUrl) data.shortUrl = formData.shortUrl;
+      if (formData.password) data.password = formData.password;
+      if (formData.expiresAt) data.expiresAt = new Date(formData.expiresAt).toISOString();
+      
+      // Check for duplicate shortURL error - only match specific duplicate keywords
+      const errorMessage = error.response?.data?.message || error.response?.data?.error || '';
+      const isDuplicateError =
+        errorMessage.toLowerCase().includes('duplicate') ||
+        errorMessage.toLowerCase().includes('sudah ada') ||
+        errorMessage.toLowerCase().includes('already exists') ||
+        error.response?.data?.error === 'duplicate';
+      
+      // Try to extract the conflicting shortURL from the error message
+      let conflictingUrl = formData.shortUrl;
+      const shortUrlMatch = errorMessage.match(/short[uU]rl['"]?\s*[:=]\s*['"]?([a-zA-Z0-9-_]+)/i);
+      if (shortUrlMatch) {
+        conflictingUrl = shortUrlMatch[1];
+      }
+      
+      if (isDuplicateError && modalMode === 'edit' && selectedUrl && hasShortUrlChanged()) {
+        // Show custom duplicate dialog instead of just error
+        // Use the duplicateOf ID from the backend response to update the CORRECT URL
+        const duplicateOfId = (error.response?.data as any)?.data?.duplicateOf ||
+                              (error.response?.data as any)?.duplicateOf ||
+                              selectedUrl.id;
+        const conflictingShortUrl = (error.response?.data as any)?.data?.conflictingShortUrl || conflictingUrl;
+        
+        setDuplicateShortUrl({
+          existingId: duplicateOfId,
+          existingShortUrl: conflictingShortUrl,
+          newShortUrl: formData.shortUrl,
+          newData: data
+        });
+        setShowDuplicateDialog(true);
+      } else {
+        setFormError(errorMessage || 'Gagal menyimpan URL');
+      }
     } finally {
       setFormLoading(false);
     }
@@ -317,6 +404,53 @@ ${fullUrl}
 
   const baseUrl = window.location.origin;
 
+  // Open hit analysis modal
+  const openHitAnalysis = async (url: Url8) => {
+    setHitAnalysisUrl(url);
+    setShowHitAnalysis(true);
+    setHitAnalysisLoading(true);
+    
+    try {
+      const response = await fetch(`/api8url/analytics/urls/${url.id}`);
+      const data = await response.json();
+      setHitAnalysisData(data);
+    } catch (err) {
+      console.error('Failed to fetch hit analysis:', err);
+      setHitAnalysisData({ success: false, message: 'Gagal memuat analisis' });
+    } finally {
+      setHitAnalysisLoading(false);
+    }
+  };
+  
+  // Reset hit counter
+  const handleResetHitCounter = async (url: Url8) => {
+    if (!confirm(`Reset hit counter untuk "${url.shortUrl}"? Counter akan kembali ke 0.`)) return;
+    
+    try {
+      await urlApi.resetCounter(url.id);
+      fetchUrls();
+    } catch (err) {
+      alert('Gagal reset hit counter');
+    }
+  };
+  
+  // Reset all hits (delete UrlHit records)
+  const handleResetAllHits = async (url: Url8) => {
+    if (!confirm(`Hapus semua data UrlHit untuk "${url.shortUrl}"? Tindakan ini tidak dapat dibatalkan.`)) return;
+    
+    try {
+      // This would require a new API endpoint or we can use the existing reset-counter
+      // For now, just reset the counter
+      await urlApi.resetCounter(url.id);
+      if (hitAnalysisUrl?.id === url.id) {
+        openHitAnalysis(url);
+      }
+      fetchUrls();
+    } catch (err) {
+      alert('Gagal reset hits');
+    }
+  };
+  
   const getChangedFields = () => {
     const changes: string[] = [];
     if (formData.shortUrl !== originalData.shortUrl) changes.push('Short URL');
@@ -382,9 +516,9 @@ ${fullUrl}
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                 {isLoading ? (
-                  <tr><td colSpan={5} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">Memuat...</td></tr>
+                  <tr><td colSpan={6} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">Memuat...</td></tr>
                 ) : urls.length === 0 ? (
-                  <tr><td colSpan={5} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">Belum ada URL. Buat URL pertama Anda!</td></tr>
+                  <tr><td colSpan={6} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">Belum ada URL. Buat URL pertama Anda!</td></tr>
                 ) : urls.map((url, index) => (
                   <tr
                     key={url.id}
@@ -440,11 +574,37 @@ ${fullUrl}
                         )}
                       </div>
                     </td>
-                    <td className="px-4 lg:px-6 py-3 lg:py-4 font-medium text-gray-900 dark:text-gray-100">
-                      {(url.hitCounter ?? 0).toLocaleString()}
+                    <td className="px-4 lg:px-6 py-3 lg:py-4">
+                      <div className="flex items-center gap-1">
+                        <span className="font-medium text-gray-900 dark:text-gray-100">
+                          {(url.hitCounter ?? 0).toLocaleString()}
+                        </span>
+                        <button
+                          onClick={() => handleResetHitCounter(url)}
+                          className="p-1 hover:bg-red-100 dark:hover:bg-red-900/50 rounded text-gray-400 hover:text-red-600 dark:hover:text-red-400"
+                          title="Reset Hit Counter"
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={() => openHitAnalysis(url)}
+                          className="p-1 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 rounded text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400"
+                          title="Analisis Hits"
+                        >
+                          <BarChart3 className="w-3 h-3" />
+                        </button>
+                      </div>
                     </td>
                     <td className="px-4 lg:px-6 py-3 lg:py-4 text-sm text-gray-500 dark:text-gray-400">
-                      {url.createdAt ? new Date(url.createdAt).toLocaleDateString('id-ID') : '-'}
+                      <div className="flex flex-col gap-0.5">
+                        <span>{url.createdAt ? new Date(url.createdAt).toLocaleDateString('id-ID') : '-'}</span>
+                        {(url as any).tglReset && (
+                          <span className="text-xs text-red-500 flex items-center gap-1" title="Tanggal Reset Terakhir">
+                            <RotateCcw className="w-3 h-3" />
+                            Reset: {new Date((url as any).tglReset).toLocaleDateString('id-ID')}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 lg:px-6 py-3 lg:py-4">
                       <div className="flex gap-1 lg:gap-2">
@@ -850,6 +1010,153 @@ ${fullUrl}
         </div>
       )}
 
+      {/* Duplicate ShortURL Dialog */}
+      {showDuplicateDialog && duplicateShortUrl && (
+        <div
+          className="fixed inset-0 bg-black/60 dark:bg-black/80 flex items-center justify-center p-4 z-[70]"
+          onClick={() => {
+            setShowDuplicateDialog(false);
+            setDuplicateShortUrl(null);
+          }}
+        >
+          <div
+            className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="bg-orange-500 dark:bg-orange-600 p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="bg-white/20 p-2 rounded-lg">
+                  <AlertTriangle className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-white">Short URL Sudah Ada!</h3>
+                  <p className="text-sm text-white/80">Konflik dengan URL yang sudah ada</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setShowDuplicateDialog(false);
+                  setDuplicateShortUrl(null);
+                }}
+                className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-white" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6">
+              <div className="mb-6">
+                <p className="text-gray-600 dark:text-gray-300 mb-4">
+                  Short URL <code className="bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded font-mono text-sm">{duplicateShortUrl.newShortUrl}</code>
+                  {' '}sudah digunakan oleh URL lain.
+                </p>
+                
+                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                        URL Existing: <code className="font-mono">{duplicateShortUrl.existingShortUrl}</code>
+                      </p>
+                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                        URL baru ingin menggunakan nama yang sama.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                  Pilih tindakan yang ingin dilakukan:
+                </p>
+                <div className="space-y-3">
+                  {/* Option 1: Keep modal open for user to fix */}
+                  <button
+                    onClick={() => {
+                      setShowDuplicateDialog(false);
+                      setDuplicateShortUrl(null);
+                      // Keep the modal open - user can change the shortURL manually
+                      // The formError will show the warning
+                      setFormError(`Short URL "${duplicateShortUrl.newShortUrl}" sudah digunakan. Silakan gunakan nama lain.`);
+                    }}
+                    className="w-full p-4 border-2 border-gray-200 dark:border-gray-600 rounded-lg hover:border-indigo-300 dark:hover:border-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all text-left group"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="bg-indigo-100 dark:bg-indigo-900/50 p-2 rounded-lg group-hover:bg-indigo-200 dark:group-hover:bg-indigo-900">
+                        <Pencil className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900 dark:text-white">Kembali ke Edit Modal</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                          Kembali ke form edit dan gunakan short URL berbeda.
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+
+                  {/* Option 2: Update existing URL Y with new values */}
+                  <button
+                    onClick={async () => {
+                      if (!duplicateShortUrl) return;
+                      setFormLoading(true);
+                      try {
+                        console.log('[DEBUG Duplicate Dialog] Updating URL ID:', duplicateShortUrl.existingId, 'with data:', duplicateShortUrl.newData);
+                        
+                        // When updating the existing URL, we should NOT update the shortUrl
+                        // because:
+                        // 1. The existing URL already has its own shortUrl
+                        // 2. The shortUrl conflict is because user tried to use a shortUrl that already exists
+                        // 3. We keep the existing URL's shortUrl and only update other fields
+                        const { shortUrl, ...updateData } = duplicateShortUrl.newData as Record<string, unknown>;
+                        console.log('[DEBUG Duplicate Dialog] Update data (keeping existing shortUrl):', updateData);
+                        
+                        await urlApi.update(duplicateShortUrl.existingId, updateData);
+                        setShowDuplicateDialog(false);
+                        setDuplicateShortUrl(null);
+                        setShowModal(false);
+                        fetchUrls();
+                      } catch (err) {
+                        console.error('[DEBUG Duplicate Dialog] Update failed:', err);
+                        setFormError('Gagal mengupdate URL yang sudah ada. Silakan coba lagi.');
+                      } finally {
+                        setFormLoading(false);
+                      }
+                    }}
+                    className="w-full p-4 border-2 border-orange-200 dark:border-orange-700 rounded-lg hover:border-orange-400 dark:hover:border-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-all text-left group"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="bg-orange-100 dark:bg-orange-900/50 p-2 rounded-lg group-hover:bg-orange-200 dark:group-hover:bg-orange-900">
+                        <Sparkles className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900 dark:text-white">Update URL yang Ada</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                          Timpa data URL existing <code className="font-mono text-xs bg-gray-100 dark:bg-gray-700 px-1 rounded">{duplicateShortUrl.existingShortUrl}</code> dengan data terbaru.
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              {/* Cancel Button */}
+              <button
+                onClick={() => {
+                  setShowDuplicateDialog(false);
+                  setDuplicateShortUrl(null);
+                }}
+                className="w-full py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 font-medium text-gray-700 dark:text-gray-300 transition-colors"
+              >
+                Batal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* WhatsApp Share Modal */}
       {showShareModal && shareUrlData && (
         <div
@@ -1015,6 +1322,185 @@ ${fullUrl}
                       Salin Informasi
                     </>
                   )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Hit Analysis Modal */}
+      {showHitAnalysis && hitAnalysisUrl && (
+        <div
+          className="fixed inset-0 bg-black/60 dark:bg-black/80 flex items-center justify-center p-4 z-50"
+          onClick={() => setShowHitAnalysis(false)}
+        >
+          <div
+            className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-4 flex items-center justify-between flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="bg-white/20 p-2 rounded-lg">
+                  <BarChart3 className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-white">Analisis Hit</h3>
+                  <p className="text-sm text-white/80">{hitAnalysisUrl.shortUrl}</p>
+                </div>
+              </div>
+              <button onClick={() => setShowHitAnalysis(false)} className="p-2 hover:bg-white/20 rounded-lg transition-colors">
+                <X className="w-5 h-5 text-white" />
+              </button>
+            </div>
+            
+            {/* Modal Content */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+              {hitAnalysisLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
+                  <span className="ml-3 text-gray-500">Memuat analisis...</span>
+                </div>
+              ) : hitAnalysisData?.success === false ? (
+                <div className="text-center py-8 text-red-500">
+                  {hitAnalysisData?.message || 'Gagal memuat analisis'}
+                </div>
+              ) : (
+                <>
+                  {/* Summary Stats */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                    <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-indigo-900/30 dark:to-indigo-800/30 rounded-xl p-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <TrendingUp className="w-4 h-4 text-indigo-600" />
+                        <span className="text-xs text-indigo-600 dark:text-indigo-400 font-medium">Total Hits</span>
+                      </div>
+                      <p className="text-2xl font-bold text-indigo-700 dark:text-indigo-300">
+                        {(hitAnalysisData?.data?.totalHits || hitAnalysisUrl.hitCounter || 0).toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/30 dark:to-green-800/30 rounded-xl p-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Monitor className="w-4 h-4 text-green-600" />
+                        <span className="text-xs text-green-600 dark:text-green-400 font-medium">Desktop</span>
+                      </div>
+                      <p className="text-2xl font-bold text-green-700 dark:text-green-300">
+                        {(hitAnalysisData?.data?.byDevice?.desktop || 0).toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30 rounded-xl p-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Smartphone className="w-4 h-4 text-blue-600" />
+                        <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">Mobile</span>
+                      </div>
+                      <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">
+                        {(hitAnalysisData?.data?.byDevice?.mobile || 0).toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/30 dark:to-purple-800/30 rounded-xl p-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Tablet className="w-4 h-4 text-purple-600" />
+                        <span className="text-xs text-purple-600 dark:text-purple-400 font-medium">Tablet</span>
+                      </div>
+                      <p className="text-2xl font-bold text-purple-700 dark:text-purple-300">
+                        {(hitAnalysisData?.data?.byDevice?.tablet || 0).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {/* Recent Hits Table */}
+                  <div className="mb-6">
+                    <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+                      <Clock className="w-4 h-4" />
+                      Hits Terbaru
+                    </h4>
+                    <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                      <div className="max-h-64 overflow-y-auto">
+                        <table className="w-full text-sm">
+                          <thead className="bg-gray-50 dark:bg-gray-900/50 sticky top-0">
+                            <tr className="text-left text-xs text-gray-500 dark:text-gray-400">
+                              <th className="px-3 py-2">Waktu</th>
+                              <th className="px-3 py-2">Perangkat</th>
+                              <th className="px-3 py-2">Browser</th>
+                              <th className="px-3 py-2">IP</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                            {hitAnalysisData?.data?.recentHits?.length > 0 ? (
+                              hitAnalysisData.data.recentHits.map((hit: any, idx: number) => (
+                                <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                  <td className="px-3 py-2 text-gray-600 dark:text-gray-400">
+                                    {new Date(hit.createdAt).toLocaleString('id-ID')}
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                                      hit.deviceType === 'desktop' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300' :
+                                      hit.deviceType === 'mobile' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300' :
+                                      'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300'
+                                    }`}>
+                                      {hit.deviceType === 'desktop' && <Monitor className="w-3 h-3" />}
+                                      {hit.deviceType === 'mobile' && <Smartphone className="w-3 h-3" />}
+                                      {hit.deviceType === 'tablet' && <Tablet className="w-3 h-3" />}
+                                      {hit.deviceType}
+                                    </span>
+                                  </td>
+                                  <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{hit.browser || '-'}</td>
+                                  <td className="px-3 py-2 text-gray-500 dark:text-gray-500 font-mono text-xs">{hit.ipAddress || '-'}</td>
+                                </tr>
+                              ))
+                            ) : (
+                              <tr>
+                                <td colSpan={4} className="px-3 py-6 text-center text-gray-500 dark:text-gray-400">
+                                  Tidak ada data hits
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Top Referrers */}
+                  {hitAnalysisData?.data?.byReferer && Object.keys(hitAnalysisData.data.byReferer).length > 0 && (
+                    <div className="mb-6">
+                      <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+                        <Globe className="w-4 h-4" />
+                        Sumber Trafic
+                      </h4>
+                      <div className="space-y-2">
+                        {Object.entries(hitAnalysisData.data.byReferer).slice(0, 5).map(([referer, count]: [string, any]) => (
+                          <div key={referer} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-900/30 rounded-lg">
+                            <span className="text-sm text-gray-700 dark:text-gray-300 truncate flex-1 mr-2">
+                              {referer || '(Direct)'}
+                            </span>
+                            <span className="text-sm font-medium text-indigo-600 dark:text-indigo-400">
+                              {Number(count).toLocaleString()}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+            
+            {/* Modal Footer */}
+            <div className="border-t border-gray-200 dark:border-gray-700 p-4 flex-shrink-0">
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  onClick={() => handleResetAllHits(hitAnalysisUrl)}
+                  className="flex-1 py-2 px-4 border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 font-medium transition-colors flex items-center justify-center gap-2"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  Reset Semua Hits
+                </button>
+                <button
+                  onClick={() => setShowHitAnalysis(false)}
+                  className="flex-1 py-2 px-4 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium transition-colors"
+                >
+                  Tutup
                 </button>
               </div>
             </div>

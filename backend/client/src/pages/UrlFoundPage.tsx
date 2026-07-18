@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useSettings } from '../contexts/SettingsContext';
 import { CheckCircle, ExternalLink, Clock, AlertCircle, Lock, Eye, EyeOff, ShieldCheck } from 'lucide-react';
+import AppHeader from '../components/AppHeader';
 
 interface UrlInfo {
   id: number;
@@ -179,7 +180,7 @@ export default function UrlFoundPage() {
     }
   };
 
-  // Mask description at password-related keywords - mask FROM keyword to end
+  // Mask description at password-related keywords - mask FROM keyword to end with #abiyoRF#
   const getProcessedDescription = (text: string): string => {
     if (!text) return '';
     
@@ -202,10 +203,9 @@ export default function UrlFoundPage() {
     if (match) {
       // Find the position of the keyword
       const keywordIndex = text.toLowerCase().indexOf(match[0].toLowerCase());
-      // Return text from start to (and including) the keyword, then mask the rest
+      // Return text BEFORE the keyword + #abiyoRF# placeholder
       const beforeKeyword = text.substring(0, keywordIndex);
-      const keywordPart = text.substring(keywordIndex, keywordIndex + match[0].length);
-      return (beforeKeyword + keywordPart + ' *****').trim();
+      return (beforeKeyword + '#abiyoRF#').trim();
     }
     
     // No password keyword found, return full text
@@ -223,10 +223,13 @@ export default function UrlFoundPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50 flex items-center justify-center">
-        <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
-          <div className="w-16 h-16 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Memuat...</p>
+      <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50 flex flex-col">
+        <AppHeader />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
+            <div className="w-16 h-16 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-gray-600">Memuat...</p>
+          </div>
         </div>
       </div>
     );
@@ -234,16 +237,19 @@ export default function UrlFoundPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-red-50 to-orange-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
-          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <AlertCircle className="w-8 h-8 text-red-600" />
+      <div className="min-h-screen bg-gradient-to-br from-red-50 to-orange-50 flex flex-col">
+        <AppHeader />
+        <div className="flex-1 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
+            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <AlertCircle className="w-8 h-8 text-red-600" />
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">URL Tidak Ditemukan</h1>
+            <p className="text-gray-600 mb-6">{error}</p>
+            <Link to="/kelola" className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium">
+              Kembali ke Dashboard
+            </Link>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">URL Tidak Ditemukan</h1>
-          <p className="text-gray-600 mb-6">{error}</p>
-          <Link to="/kelola" className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium">
-            Kembali ke Dashboard
-          </Link>
         </div>
       </div>
     );
@@ -254,7 +260,9 @@ export default function UrlFoundPage() {
     const isLocked = passwordAttempts >= MAX_PASSWORD_ATTEMPTS;
     
     return (
-      <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50 flex flex-col">
+        <AppHeader />
+        <div className="flex-1 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full">
           {/* Lock Header */}
           <div className="text-center mb-8">
@@ -273,11 +281,11 @@ export default function UrlFoundPage() {
             
             {/* Show shortUrl and Title only */}
             <div className="mt-4 space-y-2">
-              <code className="text-sm font-mono text-gray-600 bg-gray-100 px-3 py-1 rounded block">
+              <code className="text-sm font-mono text-gray-600 bg-gray-100 px-3 py-1 rounded block break-all word-break-all">
                 {baseUrl}/{urlInfo.shortUrl}
               </code>
               {urlInfo.title && (
-                <p className="text-lg font-medium text-gray-800">{urlInfo.title}</p>
+                <p className="text-lg font-medium text-gray-800 break-words">{urlInfo.title}</p>
               )}
             </div>
           </div>
@@ -377,6 +385,7 @@ export default function UrlFoundPage() {
             Akses publik • informasi ini dilindungi
           </p>
         </div>
+        </div>
       </div>
     );
   }
@@ -391,7 +400,9 @@ export default function UrlFoundPage() {
   console.log('[DEBUG UrlFoundPage] isRedirecting:', isRedirecting);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-50 flex flex-col">
+      <AppHeader />
+      <div className="flex-1 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl p-8 max-w-lg w-full">
         {/* Success Header */}
         <div className="text-center mb-8">
@@ -431,19 +442,19 @@ export default function UrlFoundPage() {
 
         {/* URL Info Card - Merged "Informasi Link" section */}
         {urlInfo && (
-          <div className="bg-gray-50 rounded-xl p-4 mb-6">
-            <div className="mb-3">
+          <div className="bg-gray-50 rounded-xl p-4 mb-6 space-y-3">
+            <div>
               <span className="text-sm text-gray-500 block mb-2">Short URL</span>
-              <code className="text-sm font-mono text-gray-800 bg-white px-3 py-2 rounded border block overflow-x-auto">
+              <code className="text-sm font-mono text-gray-800 bg-white px-3 py-2 rounded border block break-all word-break-all">
                 {baseUrl}/{(urlInfo as any).shortUrl || shortUrl}
               </code>
             </div>
             
             {/* Combined Judul + Keterangan/Deskripsi dengan masking password */}
             {getCombinedInfo() && (
-              <div className="mb-3">
+              <div>
                 <span className="text-sm text-gray-500 block mb-2">Informasi Link</span>
-                <p className="text-sm text-gray-900 bg-white px-3 py-2 rounded border min-h-[40px]">
+                <p className="text-sm text-gray-900 bg-white px-3 py-2 rounded border min-h-[40px] break-words whitespace-pre-wrap">
                   {getCombinedInfo()}
                 </p>
               </div>
@@ -451,7 +462,7 @@ export default function UrlFoundPage() {
             
             <div className="border-t pt-3">
               <span className="text-sm text-gray-500 block mb-2">Target URL</span>
-              <p className="text-sm text-indigo-600 bg-white px-3 py-2 rounded border font-mono break-all">
+              <p className="text-sm text-indigo-600 bg-white px-3 py-2 rounded border font-mono break-all word-break-all leading-relaxed">
                 {getMaskedUrl(urlInfo.targetUrl)}
               </p>
             </div>
@@ -490,9 +501,10 @@ export default function UrlFoundPage() {
         </div>
 
         {/* Footer Note */}
-        <p className="text-xs text-gray-400 text-center mt-6">
-          Anda akan diarahkan ke: {urlInfo?.targetUrl ? getMaskedUrl(urlInfo.targetUrl) : '...'}
+        <p className="text-xs text-gray-400 text-center mt-6 break-words">
+          Anda akan diarahkan ke: <span className="font-mono">{urlInfo?.targetUrl ? getMaskedUrl(urlInfo.targetUrl) : '...'}</span>
         </p>
+      </div>
       </div>
     </div>
   );

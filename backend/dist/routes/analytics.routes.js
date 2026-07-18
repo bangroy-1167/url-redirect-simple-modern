@@ -78,20 +78,18 @@ async function analyticsRoutes(app) {
      * GET /analytics/urls/:id - Detailed URL analytics
      */
     app.get('/urls/:id', async (request, reply) => {
-        const user = request.user;
         const { id } = request.params;
-        // Get URL (verify ownership)
-        const url = await database_1.default.url8.findFirst({
+        // Get URL (no ownership check - admin/owner can view)
+        const url = await database_1.default.url8.findUnique({
             where: {
                 id: parseInt(id, 10),
-                userId: user.userId,
             },
         });
         if (!url) {
             return reply.status(404).send((0, response_helper_1.fail)('URL not found'));
         }
-        // Get detailed stats
-        const [hitsByDay, topReferrers, deviceBreakdown, recentHits] = await Promise.all([
+        // Get detailed stats with comprehensive analytics
+        const [hitsByDay, topReferrers, deviceBreakdown, browserBreakdown, osBreakdown, hourlyDist, recentHits] = await Promise.all([
             // Hits by day (last 30 days)
             database_1.default.$queryRaw `
           SELECT DATE(created_at) as date, COUNT(*) as count
@@ -111,24 +109,52 @@ async function analyticsRoutes(app) {
           ORDER BY count DESC
           LIMIT 10
         `,
-            // Device breakdown
+            // Device breakdown with counts
             database_1.default.$queryRaw `
           SELECT device_type, COUNT(*) as count
           FROM url_hits
           WHERE url_id = ${url.id}
           GROUP BY device_type
         `,
-            // Recent hits (last 20)
+            // Browser breakdown
+            database_1.default.$queryRaw `
+          SELECT browser, COUNT(*) as count
+          FROM url_hits
+          WHERE url_id = ${url.id}
+          AND browser IS NOT NULL
+          GROUP BY browser
+          ORDER BY count DESC
+        `,
+            // OS breakdown
+            database_1.default.$queryRaw `
+          SELECT os, COUNT(*) as count
+          FROM url_hits
+          WHERE url_id = ${url.id}
+          AND os IS NOT NULL
+          GROUP BY os
+          ORDER BY count DESC
+        `,
+            // Hourly distribution
+            database_1.default.$queryRaw `
+          SELECT HOUR(created_at) as hour, COUNT(*) as count
+          FROM url_hits
+          WHERE url_id = ${url.id}
+          GROUP BY HOUR(created_at)
+          ORDER BY hour ASC
+        `,
+            // Recent hits (last 50)
             database_1.default.urlHit.findMany({
                 where: { urlId: url.id },
                 orderBy: { createdAt: 'desc' },
-                take: 20,
+                take: 50,
                 select: {
+                    id: true,
                     ipAddress: true,
                     referer: true,
                     deviceType: true,
                     browser: true,
                     os: true,
+                    country: true,
                     createdAt: true,
                 },
             }),
@@ -139,21 +165,62 @@ async function analyticsRoutes(app) {
             where: { urlId: url.id },
             _count: true,
         });
+        // Format device breakdown
+        const byDevice = {};
+        if (Array.isArray(deviceBreakdown)) {
+            deviceBreakdown.forEach((d) => {
+                byDevice[d.device_type?.toLowerCase() || 'other'] = Number(d.count);
+            });
+        }
+        // Format browser breakdown
+        const byBrowser = {};
+        if (Array.isArray(browserBreakdown)) {
+            browserBreakdown.forEach((b) => {
+                if (b.browser)
+                    byBrowser[b.browser] = Number(b.count);
+            });
+        }
+        // Format OS breakdown
+        const byOs = {};
+        if (Array.isArray(osBreakdown)) {
+            osBreakdown.forEach((o) => {
+                if (o.os)
+                    byOs[o.os] = Number(o.count);
+            });
+        }
+        // Format referrers
+        const byReferer = {};
+        if (Array.isArray(topReferrers)) {
+            topReferrers.forEach((r) => {
+                byReferer[r.referer || '(Direct)'] = Number(r.count);
+            });
+        }
+        // Format hourly distribution
+        const byHour = {};
+        if (Array.isArray(hourlyDist)) {
+            hourlyDist.forEach((h) => {
+                byHour[Number(h.hour)] = Number(h.count);
+            });
+        }
         return reply.send((0, response_helper_1.ok)({
             url: {
                 id: url.id,
                 shortUrl: url.shortUrl,
                 title: url.title,
+                targetUrl: url.targetUrl,
                 hitCounter: url.hitCounter,
+                createdAt: url.createdAt,
             },
             stats: {
                 totalHits: url.hitCounter,
                 uniqueVisitors: uniqueVisitors.length,
                 avgHitsPerDay: url.hitCounter / 30,
             },
-            hitsByDay,
-            topReferrers,
-            deviceBreakdown,
+            byDevice,
+            byBrowser,
+            byOs,
+            byReferer,
+            byHour,
             recentHits,
         }, 'Success'));
     });

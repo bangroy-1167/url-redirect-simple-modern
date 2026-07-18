@@ -8,6 +8,7 @@ import { Settings, Info, Check, AlertTriangle } from 'lucide-react';
 interface AppSettings {
   appName: string;
   appSubtitle: string;
+  appVersion: string;
   autoRedirect: boolean;
   autoRedirectDelay: number;
   rateLimitPublic: number;
@@ -101,6 +102,14 @@ export default function SettingsPage() {
             <input type="text" value={localSettings.appSubtitle}
               onChange={e => handleChange('appSubtitle', e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Versi Aplikasi</label>
+            <input type="text" value={localSettings.appVersion}
+              onChange={e => handleChange('appVersion', e.target.value)}
+              placeholder="v.2.09"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 font-mono" />
+            <p className="text-xs text-gray-500 mt-1">Versi aplikasi yang ditampilkan di halaman publik.</p>
           </div>
         </SettingCard>
 

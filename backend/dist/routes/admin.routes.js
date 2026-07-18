@@ -274,6 +274,7 @@ async function adminRoutes(app) {
         const result = {
             appName: settingsMap['app_name'] || 'modernURL8',
             appSubtitle: settingsMap['app_subtitle'] || 'URL Redirection Service',
+            appVersion: settingsMap['app_version'] || 'v.2.09',
             autoRedirect: settingsMap['auto_redirect'] !== 'false',
             autoRedirectDelay: parseInt(settingsMap['auto_redirect_delay'] || '2', 10),
             rateLimitPublic: parseInt(settingsMap['rate_limit_public'] || process.env.RATE_LIMIT_PUBLIC || '20', 10),
@@ -289,6 +290,7 @@ async function adminRoutes(app) {
         const settingsToUpdate = [
             { key: 'app_name', value: String(data.appName || 'modernURL8') },
             { key: 'app_subtitle', value: String(data.appSubtitle || 'URL Redirection Service') },
+            { key: 'app_version', value: String(data.appVersion || 'v.2.09') },
             { key: 'auto_redirect', value: String(data.autoRedirect !== false) },
             { key: 'auto_redirect_delay', value: String(data.autoRedirectDelay || 2) },
             { key: 'rate_limit_public', value: String(data.rateLimitPublic || 20) },

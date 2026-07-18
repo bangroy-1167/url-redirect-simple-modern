@@ -137,10 +137,19 @@ async function urlRoutes(app) {
                 return reply.status(500).send((0, response_helper_1.fail)('Failed to generate unique short URL'));
             }
         }
-        // Check if short URL already exists
-        const existing = await database_1.default.url8.findUnique({ where: { shortUrl: finalShortUrl } });
+        // Check if short URL already exists (case-insensitive)
+        const existingUrls = await database_1.default.url8.findMany();
+        const existing = existingUrls.find(e => e.shortUrl.toLowerCase() === finalShortUrl.toLowerCase());
         if (existing) {
-            return reply.status(400).send((0, response_helper_1.validationFail)({ shortUrl: ['Short URL already exists'] }));
+            return reply.status(400).send({
+                success: false,
+                message: `Short URL "${finalShortUrl}" sudah digunakan. Gunakan nama lain atau update URL existing.`,
+                error: 'duplicate',
+                data: {
+                    duplicateOf: existing.id,
+                    conflictingShortUrl: existing.shortUrl
+                }
+            });
         }
         // Hash password if provided
         let hashedPassword = null;
@@ -210,10 +219,37 @@ async function urlRoutes(app) {
                 hashedPassword = null;
             }
         }
+        // Check for duplicate shortUrl when changing to a different shortUrl
+        // Only check if shortUrl is being changed to a different value
+        if (data.shortUrl) {
+            // Find existing URLs with the same shortUrl (case-insensitive)
+            const existingUrls = await database_1.default.url8.findMany({
+                where: {
+                    id: { not: parseInt(id, 10) }
+                }
+            });
+            // Check for case-insensitive match
+            const existingShortUrl = existingUrls.find(existing => existing.shortUrl.toLowerCase() === data.shortUrl.toLowerCase());
+            if (existingShortUrl) {
+                // Another URL (not this one) has a shortUrl that matches case-insensitively
+                // Return error with the conflicting URL's ID
+                return reply.status(400).send({
+                    success: false,
+                    message: `Short URL "${data.shortUrl}" sudah digunakan oleh URL lain. Gunakan nama lain atau update URL existing.`,
+                    error: 'duplicate',
+                    data: {
+                        duplicateOf: existingShortUrl.id,
+                        conflictingShortUrl: existingShortUrl.shortUrl
+                    }
+                });
+            }
+        }
+        // Determine the shortUrl to use: new value if changed, otherwise keep existing
+        const finalShortUrl = data.shortUrl ? data.shortUrl : url.shortUrl;
         const updated = await database_1.default.url8.update({
             where: { id: parseInt(id, 10) },
             data: {
-                ...(data.shortUrl && { shortUrl: data.shortUrl }),
+                shortUrl: finalShortUrl,
                 ...(data.targetUrl && { targetUrl: data.targetUrl }),
                 ...(data.title !== undefined && { title: data.title }),
                 ...(data.description !== undefined && { description: data.description }),
