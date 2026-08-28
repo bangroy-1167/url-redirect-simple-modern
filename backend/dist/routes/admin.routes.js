@@ -24,9 +24,12 @@ async function adminRoutes(app) {
             defaultSortBy: 'createdAt',
             defaultSortDir: 'desc',
         });
+        const query = request.query;
+        const isLongArchived = query.longArchived === "true";
         const where = (0, query_helper_1.buildWhere)({
             search: pg.search ? { term: pg.search, fields: ['shortUrl', 'title', 'keterangan'] } : undefined,
             filters: pg.filters,
+            extra: isLongArchived ? { expDate: { gt: new Date(new Date().setFullYear(new Date().getFullYear() + 10)) } } : undefined,
             allowedFilters: ['isActive', 'userId'],
         });
         const [urls, total] = await database_1.default.$transaction([
@@ -57,6 +60,8 @@ async function adminRoutes(app) {
             defaultSortBy: 'createdAt',
             defaultSortDir: 'desc',
         });
+        const query = request.query;
+        const isLongArchived = query.longArchived === "true";
         const where = (0, query_helper_1.buildWhere)({
             search: pg.search ? { term: pg.search, fields: ['username', 'email'] } : undefined,
             filters: pg.filters,
@@ -275,6 +280,7 @@ async function adminRoutes(app) {
             appName: settingsMap['app_name'] || 'modernURL8',
             appSubtitle: settingsMap['app_subtitle'] || 'URL Redirection Service',
             appVersion: settingsMap['app_version'] || 'v.2.09',
+            defaultLanguage: settingsMap['default_language'] || 'id',
             autoRedirect: settingsMap['auto_redirect'] !== 'false',
             autoRedirectDelay: parseInt(settingsMap['auto_redirect_delay'] || '2', 10),
             rateLimitPublic: parseInt(settingsMap['rate_limit_public'] || process.env.RATE_LIMIT_PUBLIC || '20', 10),
@@ -291,6 +297,7 @@ async function adminRoutes(app) {
             { key: 'app_name', value: String(data.appName || 'modernURL8') },
             { key: 'app_subtitle', value: String(data.appSubtitle || 'URL Redirection Service') },
             { key: 'app_version', value: String(data.appVersion || 'v.2.09') },
+            { key: 'default_language', value: String(data.defaultLanguage || 'id') },
             { key: 'auto_redirect', value: String(data.autoRedirect !== false) },
             { key: 'auto_redirect_delay', value: String(data.autoRedirectDelay || 2) },
             { key: 'rate_limit_public', value: String(data.rateLimitPublic || 20) },

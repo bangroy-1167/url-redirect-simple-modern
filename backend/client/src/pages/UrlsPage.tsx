@@ -8,7 +8,7 @@ import Pagination from '../components/Pagination';
 import {
   Plus, Search, X, Copy, Check, ExternalLink, Pencil, Trash2, AlertCircle, AlertTriangle, Sparkles, Lightbulb,
   ChevronUp, ChevronDown, Link2, Calendar, MessageSquare, FileText, Users, Presentation, Share2, Lock,
-  RotateCcw, BarChart3, Globe, Monitor, Smartphone, Tablet, Clock, MapPin, TrendingUp
+  RotateCcw, BarChart3, Globe, Monitor, Smartphone, Tablet, Clock, MapPin, TrendingUp, Timer, TimerOff, Archive
 } from 'lucide-react';
 
 // Safe characters for short URL - human-friendly mix
@@ -32,6 +32,7 @@ export default function UrlsPage() {
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [pagination, setPagination] = useState({ page: 1, per_page: 50, total: 0, total_pages: 0 });
+  const [longArchivedOnly, setLongArchivedOnly] = useState(false);
   const [sortBy, setSortBy] = useState('createdAt');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [copiedId, setCopiedId] = useState<number | null>(null);
@@ -115,6 +116,7 @@ ${fullUrl}
         sort_dir: sortDir
       };
       if (search) params.search = search;
+      if (longArchivedOnly) params.longArchived = "true";
       const isAdmin = user?.role === 'ADMIN';
       const api = isAdmin ? adminUrlApi : urlApi;
       const response = await api.list(params);
@@ -152,7 +154,7 @@ ${fullUrl}
     } finally {
       setIsLoading(false);
     }
-  }, [pagination.page, pagination.per_page, search, sortBy, sortDir, user?.role]);
+  }, [pagination.page, pagination.per_page, search, sortBy, sortDir, user?.role, longArchivedOnly]);
 
   useEffect(() => { fetchUrls(); }, [fetchUrls]);
 
@@ -268,6 +270,7 @@ ${fullUrl}
       if (formData.shortUrl) data.shortUrl = formData.shortUrl;
       if (formData.password) data.password = formData.password;
       if (formData.expiresAt) data.expiresAt = new Date(formData.expiresAt).toISOString();
+      else if (modalMode === "edit") data.expiresAt = null;
       
       // Handle password removal in edit mode
       if (modalMode === 'edit' && removePassword && originalHasPassword) {
@@ -320,6 +323,7 @@ ${fullUrl}
       if (formData.shortUrl) data.shortUrl = formData.shortUrl;
       if (formData.password) data.password = formData.password;
       if (formData.expiresAt) data.expiresAt = new Date(formData.expiresAt).toISOString();
+      else if (modalMode === "edit") data.expiresAt = null;
       
       // Check for duplicate shortURL error - only match specific duplicate keywords
       const errorMessage = error.response?.data?.message || error.response?.data?.error || '';
@@ -499,6 +503,9 @@ ${fullUrl}
                   <th className="px-4 lg:px-6 py-3 font-medium">
                     <button onClick={() => handleSort('title')} className="flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-200">
                       Judul {sortBy === 'title' ? (sortDir === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />) : null}
+                      <button onClick={(e) => { e.stopPropagation(); setLongArchivedOnly(!longArchivedOnly); setPagination(prev => ({ ...prev, page: 1 })); }} className={`ml-2 p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 ${longArchivedOnly ? 'text-indigo-600 bg-indigo-50 dark:bg-indigo-900/50' : 'text-gray-400'}`} title="Filter Long-Archived (> 10 tahun)">
+                        <Archive className="w-4 h-4" />
+                      </button>
                     </button>
                   </th>
                   <th className="px-4 lg:px-6 py-3 font-medium">
@@ -566,6 +573,17 @@ ${fullUrl}
                           <span className="truncate" title={url.title || url.keterangan || '-'}>
                             {url.title || url.keterangan || '-'}
                           </span>
+                          {url.expDate && (
+                            new Date(url.expDate).getTime() <= new Date().getTime() ? (
+                              <span className="text-red-500 flex-shrink-0" title={`Expired: ${new Date(url.expDate).toLocaleDateString('id-ID')}`}>
+                                <TimerOff className="w-3.5 h-3.5" />
+                              </span>
+                            ) : (
+                              <span className="text-green-500 flex-shrink-0" title={`Valid until: ${new Date(url.expDate).toLocaleDateString('id-ID')}`}>
+                                <Timer className="w-3.5 h-3.5" />
+                              </span>
+                            )
+                          )}
                         </div>
                         {url.user && (
                           <div className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 truncate" title={`Dibuat oleh: ${url.user.username || url.user.email}`}>
@@ -674,6 +692,21 @@ ${fullUrl}
                     <p className="text-xs text-gray-400 dark:text-gray-500">
                       @{url.user.username || url.user.email?.split('@')[0]}
                     </p>
+                  )}
+                  {url.expDate && (
+                    <div className="flex items-center gap-1 mt-1 text-xs">
+                      {new Date(url.expDate).getTime() <= new Date().getTime() ? (
+                        <>
+                          <TimerOff className="w-3 h-3 text-red-500" />
+                          <span className="text-red-500">Expired: {new Date(url.expDate).toLocaleDateString('id-ID')}</span>
+                        </>
+                      ) : (
+                        <>
+                          <Timer className="w-3 h-3 text-green-500" />
+                          <span className="text-green-500">Valid: {new Date(url.expDate).toLocaleDateString('id-ID')}</span>
+                        </>
+                      )}
+                    </div>
                   )}
                 </div>
                 

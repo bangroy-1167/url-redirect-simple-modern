@@ -43,9 +43,13 @@ export async function adminRoutes(app: FastifyInstance) {
       defaultSortDir: 'desc',
     });
     
+    const query = request.query as Record<string, unknown>;
+    const isLongArchived = query.longArchived === "true";
+
     const where = buildWhere({
       search: pg.search ? { term: pg.search, fields: ['shortUrl', 'title', 'keterangan'] } : undefined,
       filters: pg.filters,
+      extra: isLongArchived ? { expDate: { gt: new Date(new Date().setFullYear(new Date().getFullYear() + 10)) } } : undefined,
       allowedFilters: ['isActive', 'userId'],
     });
     
@@ -80,6 +84,9 @@ export async function adminRoutes(app: FastifyInstance) {
       defaultSortDir: 'desc',
     });
     
+    const query = request.query as Record<string, unknown>;
+    const isLongArchived = query.longArchived === "true";
+
     const where = buildWhere({
       search: pg.search ? { term: pg.search, fields: ['username', 'email'] } : undefined,
       filters: pg.filters,
