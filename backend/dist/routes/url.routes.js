@@ -51,10 +51,12 @@ async function urlRoutes(app) {
             defaultSortBy: 'createdAt',
             defaultSortDir: 'desc',
         });
+        const query = request.query;
+        const isLongArchived = query.longArchived === "true";
         const where = (0, query_helper_1.buildWhere)({
             search: pg.search ? { term: pg.search, fields: ['shortUrl', 'title', 'keterangan'] } : undefined,
             filters: pg.filters,
-            extra: { userId: userId },
+            extra: { userId: userId, ...(isLongArchived ? { expDate: { gt: new Date(new Date().setFullYear(new Date().getFullYear() + 10)) } } : {}) },
             allowedFilters: ['isActive'],
         });
         const [urls, total] = await database_1.default.$transaction([

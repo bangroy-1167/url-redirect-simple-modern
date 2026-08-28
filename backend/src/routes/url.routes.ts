@@ -23,7 +23,7 @@ interface CreateUrlBody {
   title?: string;
   description?: string;
   password?: string;
-  expiresAt?: string;
+  expiresAt?: string | null;
 }
 
 interface UpdateUrlBody {
@@ -32,7 +32,7 @@ interface UpdateUrlBody {
   title?: string;
   description?: string;
   password?: string;
-  expiresAt?: string;
+  expiresAt?: string | null;
   isActive?: boolean;
   removePassword?: boolean;
 }
@@ -78,10 +78,13 @@ export async function urlRoutes(app: FastifyInstance) {
       defaultSortDir: 'desc',
     });
     
+    const query = request.query as Record<string, unknown>;
+    const isLongArchived = query.longArchived === "true";
+
     const where = buildWhere({
       search: pg.search ? { term: pg.search, fields: ['shortUrl', 'title', 'keterangan'] } : undefined,
       filters: pg.filters,
-      extra: { userId: userId },
+      extra: { userId: userId, ...(isLongArchived ? { expDate: { gt: new Date(new Date().setFullYear(new Date().getFullYear() + 10)) } } : {}) },
       allowedFilters: ['isActive'],
     });
     
