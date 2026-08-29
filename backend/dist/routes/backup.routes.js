@@ -4,18 +4,41 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.backupRoutes = backupRoutes;
-const database_1 = __importDefault(require("../config/database")); // Need to check where prisma is exported from
+const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
+const database_1 = __importDefault(require("../config/database"));
 const response_helper_1 = require("../helpers/response.helper");
+// Helper to check admin role
+function isAdmin(user) {
+    return user && (user.role === 'ADMIN' || user.role === 'admin');
+}
 async function backupRoutes(app) {
-    // Add authentication middleware for all backup routes
-    app.addHook('preHandler', app.authenticate);
+    // Helper to authenticate and get user from request
+    const authenticate = async (request, reply) => {
+        const authHeader = request.headers.authorization;
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            reply.status(401).send({ success: false, message: 'Unauthorized: No token provided' });
+            return null;
+        }
+        const token = authHeader.substring(7);
+        const jwtSecret = process.env.JWT_SECRET || 'change-this-in-production';
+        try {
+            const decoded = jsonwebtoken_1.default.verify(token, jwtSecret);
+            return decoded;
+        }
+        catch (err) {
+            reply.status(401).send({ success: false, message: 'Unauthorized: Invalid or expired token' });
+            return null;
+        }
+    };
     /**
      * GET /backup/urls - Export URLs
      */
     app.get('/urls', async (request, reply) => {
-        const user = request.user;
+        const user = await authenticate(request, reply);
+        if (!user)
+            return;
         let urls;
-        if (user.role === 'ADMIN') {
+        if (isAdmin(user)) {
             urls = await database_1.default.url8.findMany();
         }
         else {
@@ -29,13 +52,13 @@ async function backupRoutes(app) {
      * POST /backup/urls - Import URLs
      */
     app.post('/urls', async (request, reply) => {
-        const user = request.user;
+        const user = await authenticate(request, reply);
+        if (!user)
+            return;
         const { data } = request.body;
         if (!Array.isArray(data)) {
             return reply.status(400).send((0, response_helper_1.fail)('Invalid data format. Expected an array.'));
         }
-        // For regular users, ensure they only import URLs for themselves
-        // and don't overwrite existing ones if they don't own them
         let importedCount = 0;
         for (const item of data) {
             try {
@@ -49,7 +72,7 @@ async function backupRoutes(app) {
                     isActive: item.isActive !== undefined ? item.isActive : true,
                     hitCounter: item.hitCounter || 0,
                     expDate: item.expDate,
-                    userId: user.role === 'ADMIN' ? (item.userId || user.userId) : user.userId,
+                    userId: isAdmin(user) ? (item.userId || user.userId) : user.userId,
                 };
                 await database_1.default.url8.upsert({
                     where: { shortUrl: item.shortUrl },
@@ -64,23 +87,29 @@ async function backupRoutes(app) {
         }
         return reply.send((0, response_helper_1.ok)({ count: importedCount }, `Successfully imported ${importedCount} URLs`));
     });
-    const requireAdmin = async (request, reply) => {
-        const user = request.user;
-        if (!user || user.role !== 'ADMIN') {
-            return reply.status(403).send((0, response_helper_1.fail)('Forbidden: Admin access required'));
-        }
-    };
     /**
      * GET /backup/users - Export Users (ADMIN ONLY)
      */
-    app.get('/users', { preHandler: requireAdmin }, async (request, reply) => {
+    app.get('/users', async (request, reply) => {
+        const user = await authenticate(request, reply);
+        if (!user)
+            return;
+        if (!isAdmin(user)) {
+            return reply.status(403).send((0, response_helper_1.fail)('Forbidden: Admin access required'));
+        }
         const users = await database_1.default.user.findMany();
         return reply.send((0, response_helper_1.ok)(users, 'Users exported successfully'));
     });
     /**
      * POST /backup/users - Import Users (ADMIN ONLY)
      */
-    app.post('/users', { preHandler: requireAdmin }, async (request, reply) => {
+    app.post('/users', async (request, reply) => {
+        const user = await authenticate(request, reply);
+        if (!user)
+            return;
+        if (!isAdmin(user)) {
+            return reply.status(403).send((0, response_helper_1.fail)('Forbidden: Admin access required'));
+        }
         const { data } = request.body;
         if (!Array.isArray(data)) {
             return reply.status(400).send((0, response_helper_1.fail)('Invalid data format. Expected an array.'));
@@ -89,10 +118,10 @@ async function backupRoutes(app) {
         for (const item of data) {
             try {
                 await database_1.default.user.upsert({
-                    where: { email: item.email }, // Use email as unique identifier for import
+                    where: { email: item.email },
                     update: {
                         username: item.username,
-                        password: item.password, // This is already hashed
+                        password: item.password,
                         role: item.role,
                         isActive: item.isActive !== undefined ? item.isActive : true,
                     },
@@ -115,14 +144,26 @@ async function backupRoutes(app) {
     /**
      * GET /backup/settings - Export Settings (ADMIN ONLY)
      */
-    app.get('/settings', { preHandler: requireAdmin }, async (request, reply) => {
+    app.get('/settings', async (request, reply) => {
+        const user = await authenticate(request, reply);
+        if (!user)
+            return;
+        if (!isAdmin(user)) {
+            return reply.status(403).send((0, response_helper_1.fail)('Forbidden: Admin access required'));
+        }
         const settings = await database_1.default.urRedirectSet.findMany();
         return reply.send((0, response_helper_1.ok)(settings, 'Settings exported successfully'));
     });
     /**
      * POST /backup/settings - Import Settings (ADMIN ONLY)
      */
-    app.post('/settings', { preHandler: requireAdmin }, async (request, reply) => {
+    app.post('/settings', async (request, reply) => {
+        const user = await authenticate(request, reply);
+        if (!user)
+            return;
+        if (!isAdmin(user)) {
+            return reply.status(403).send((0, response_helper_1.fail)('Forbidden: Admin access required'));
+        }
         const { data } = request.body;
         if (!Array.isArray(data)) {
             return reply.status(400).send((0, response_helper_1.fail)('Invalid data format. Expected an array.'));

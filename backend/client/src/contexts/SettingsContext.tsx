@@ -23,7 +23,7 @@ const defaultSettings: AppSettings = {
   appVersion: 'v.2.09',
   defaultLanguage: 'id',
   autoRedirect: true,
-  autoRedirectDelay: 15,
+  autoRedirectDelay: 7,
   rateLimitPublic: 50,
   rateLimitAuth: 100,
 };
@@ -43,47 +43,42 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const fetchSettings = async () => {
+    setLoading(true);
     try {
-      // Check if user is logged in
       const token = localStorage.getItem('token');
-      console.log('[SettingsContext] Fetching settings, token present:', !!token);
       
       if (token) {
         // Try admin endpoint first if logged in
         try {
-          console.log('[SettingsContext] Trying /api8url/admin/settings');
           const response = await fetch('/api8url/admin/settings', {
             headers: {
               'Authorization': `Bearer ${token}`,
             },
           });
-          console.log('[SettingsContext] Admin settings response status:', response.status);
           const data = await response.json();
-          console.log('[SettingsContext] Admin settings response:', data);
           if (data.success && data.data) {
             setSettings(data.data);
-            setLoading(false);
-            return;
+            return; // Exit early - no need for fallback
           }
         } catch (err) {
-          console.log('[SettingsContext] Admin settings fetch failed, using public settings', err);
+          console.error('[SettingsContext] Admin settings fetch failed:', err);
         }
       }
       
       // Fallback to public endpoint (no auth required)
-      console.log('[SettingsContext] Trying /settings (public)');
       const response = await fetch('/settings');
-      console.log('[SettingsContext] Public settings response status:', response.status);
       const data = await response.json();
-      console.log('[SettingsContext] Public settings response:', data);
       if (data.success && data.data) {
         setSettings(data.data);
+      } else {
+        // Use default settings if both endpoints fail
+        setSettings(defaultSettings);
       }
     } catch (err) {
       console.error('[SettingsContext] Failed to load settings:', err);
+      setSettings(defaultSettings);
     } finally {
       setLoading(false);
-      console.log('[SettingsContext] Settings loaded:', settings);
     }
   };
 

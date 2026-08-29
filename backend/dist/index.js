@@ -115,9 +115,9 @@ async function buildApp() {
     app.get('/kelola/urls', async (request, reply) => sendSpaIndex(request, reply));
     app.get('/kelola/users', async (request, reply) => sendSpaIndex(request, reply));
     app.get('/kelola/settings', async (request, reply) => sendSpaIndex(request, reply));
-    // Register auth middleware
+    // Register auth middleware FIRST - before any protected routes
     await app.register(auth_middleware_1.authMiddleware);
-    // API routes
+    // API routes (these use app.authenticate from authMiddleware)
     await app.register(auth_routes_1.authRoutes, { prefix: `${API_PREFIX}/auth` });
     await app.register(url_routes_1.urlRoutes, { prefix: `${API_PREFIX}/urls` });
     await app.register(analytics_routes_1.analyticsRoutes, { prefix: `${API_PREFIX}/analytics` });
