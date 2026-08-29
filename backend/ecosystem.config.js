@@ -1,30 +1,24 @@
-const fs = require('fs');
-const path = require('path');
- 
-// Path ke C:\laragon\etc\ssl\
-const sslBasePath = 'C:\\laragon\\etc\\ssl';
- 
-
-//const key = fs.readFileSync(path.join(sslBasePath, 'mnst.thinking.my.id.key'));
-//const cert = fs.readFileSync(path.join(sslBasePath, 'mnst.thinking.my.id.crt'));
- 
-
 module.exports = {
   apps: [{
-    name: 'urlz-prod',
-    script: './public/dist/index.js',
+    name: 'app2-urlref',
+    script: './dist/index.js',
     cwd: __dirname,
     env: {
       NODE_ENV: 'production',
-      PORT: 8001,
-      HTTPS_KEY: key.toString(),
-      HTTPS_CERT: cert.toString(),      API_PREFIX: '/api18url',
-      DATABASE_URL: 'postgresql://postgres.hnvcbgefezpyjmpyurhb:q_a5muBbWJem4y5@aws-1-ap-southeast-1.pooler.supabase.com:6543/postgres?pgbouncer=true&connection_limit=1',
-      JWT_SECRET: '867453b8033e27e32a867e708ac1b6a591d2dbcf9fe12bfa1ace56a2da1b0c50',
-      JWT_EXPIRES_IN: '7d',
-      CORS_ORIGINS: '*',
-      MAX_FILE_SIZE: '2485760',
-      UPLOAD_DIR: './uploads'
+      PORT: 38802,
+      API_PREFIX: '',
+      DATABASE_URL: 'mysql://root:password234@localhost:3306/thin1722_urlsRF',
+      DATABASE_HOST: 'localhost',
+      DATABASE_PORT: 3306,
+      DATABASE_NAME: 'thin1722_urlsRF',
+      DATABASE_USER: 'root',
+      DATABASE_PASSWORD: 'password234',
+      JWT_SECRET: 'change-randomthis-to-a-strong--secret-key',
+      JWT_EXPIRES_IN: '1d',
+      JWT_REFRESH_EXPIRES_IN: '7d',
+      RATE_LIMIT_PUBLIC: 200,
+      RATE_LIMIT_AUTH: 500,
+      CORS_ORIGINS: '*'
     },
     instances: 1,
     exec_mode: 'fork',
