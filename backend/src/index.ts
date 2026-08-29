@@ -131,10 +131,10 @@ async function buildApp() {
 
 
 
-  // Register auth middleware
+  // Register auth middleware FIRST - before any protected routes
   await app.register(authMiddleware);
 
-  // API routes
+  // API routes (these use app.authenticate from authMiddleware)
   await app.register(authRoutes, { prefix: `${API_PREFIX}/auth` });
   await app.register(urlRoutes, { prefix: `${API_PREFIX}/urls` });
   await app.register(analyticsRoutes, { prefix: `${API_PREFIX}/analytics` });
