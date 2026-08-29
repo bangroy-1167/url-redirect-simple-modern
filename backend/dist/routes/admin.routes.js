@@ -11,6 +11,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.adminRoutes = adminRoutes;
 const bcrypt_1 = __importDefault(require("bcrypt"));
+const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const database_1 = __importDefault(require("../config/database"));
 const response_helper_1 = require("../helpers/response.helper");
 const pagination_helper_1 = require("../helpers/pagination.helper");
@@ -312,6 +313,108 @@ async function adminRoutes(app) {
             });
         }
         return reply.send((0, response_helper_1.ok)(null, 'Settings updated successfully'));
+    });
+    /**
+     * DELETE /admin/urls/clear - Truncate all URLs (admin only)
+     */
+    app.delete('/urls/clear', async (request, reply) => {
+        // Check admin
+        const authHeader = request.headers.authorization;
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            return reply.status(401).send({ success: false, message: 'Unauthorized' });
+        }
+        try {
+            const token = authHeader.substring(7);
+            const jwtSecret = process.env.JWT_SECRET || 'change-this-in-production';
+            const decoded = jsonwebtoken_1.default.verify(token, jwtSecret);
+            if (decoded.role !== 'ADMIN' && decoded.role !== 'admin') {
+                return reply.status(403).send({ success: false, message: 'Admin access required' });
+            }
+        }
+        catch (err) {
+            return reply.status(401).send({ success: false, message: 'Invalid token' });
+        }
+        try {
+            // Delete url_hits first (FK constraint)
+            const deleteHits = await database_1.default.urlHit.deleteMany({});
+            // Then delete all URLs
+            const deleteUrls = await database_1.default.url8.deleteMany({});
+            console.log(`[Admin] URLs cleared: ${deleteUrls.count} URLs, ${deleteHits.count} hits`);
+            return reply.send((0, response_helper_1.ok)({
+                deleted: deleteUrls.count,
+                hitsDeleted: deleteHits.count
+            }, 'All URLs cleared successfully'));
+        }
+        catch (error) {
+            console.error('[Admin] Error clearing URLs:', error);
+            return reply.status(500).send({ success: false, message: 'Failed to clear URLs' });
+        }
+    });
+    /**
+     * DELETE /admin/users/clear-non-admins - Delete non-admin users (admin only)
+     */
+    app.delete('/users/clear-non-admins', async (request, reply) => {
+        // Check admin
+        const authHeader = request.headers.authorization;
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            return reply.status(401).send({ success: false, message: 'Unauthorized' });
+        }
+        try {
+            const token = authHeader.substring(7);
+            const jwtSecret = process.env.JWT_SECRET || 'change-this-in-production';
+            const decoded = jsonwebtoken_1.default.verify(token, jwtSecret);
+            if (decoded.role !== 'ADMIN' && decoded.role !== 'admin') {
+                return reply.status(403).send({ success: false, message: 'Admin access required' });
+            }
+        }
+        catch (err) {
+            return reply.status(401).send({ success: false, message: 'Invalid token' });
+        }
+        try {
+            // Get all non-admin users
+            const nonAdminUsers = await database_1.default.user.findMany({
+                where: {
+                    OR: [
+                        { role: { not: 'ADMIN' } },
+                        { isActive: false }
+                    ]
+                }
+            });
+            // Count admins (protected)
+            const adminCount = await database_1.default.user.count({
+                where: {
+                    role: "ADMIN",
+                    isActive: true
+                }
+            });
+            // Delete non-admin users
+            let deletedCount = 0;
+            for (const user of nonAdminUsers) {
+                // Delete user sessions first
+                await database_1.default.userSession.deleteMany({
+                    where: { userId: user.id }
+                });
+                // Delete user's URLs
+                await database_1.default.url8.deleteMany({
+                    where: { userId: user.id }
+                });
+                // Delete user
+                await database_1.default.user.delete({
+                    where: { id: user.id }
+                });
+                deletedCount++;
+            }
+            console.log(`[Admin] Non-admin users cleared: ${deletedCount} deleted, ${adminCount} protected`);
+            return reply.send((0, response_helper_1.ok)({
+                total: nonAdminUsers.length + adminCount,
+                adminsProtected: adminCount,
+                deleted: deletedCount
+            }, 'Non-admin users cleared successfully'));
+        }
+        catch (error) {
+            console.error('[Admin] Error clearing non-admin users:', error);
+            return reply.status(500).send({ success: false, message: 'Failed to clear non-admin users' });
+        }
     });
 }
 //# sourceMappingURL=admin.routes.js.map

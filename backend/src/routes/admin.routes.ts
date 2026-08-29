@@ -7,6 +7,7 @@
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import bcrypt from 'bcrypt';
+import jwt from "jsonwebtoken";
 import prisma from '../config/database';
 import { ok, fail, validationFail } from '../helpers/response.helper';
 import { parsePagination, buildMeta } from '../helpers/pagination.helper';
@@ -15,6 +16,14 @@ import { buildWhere } from '../helpers/query.helper';
 // Types
 interface UserParams {
   id: string;
+}
+
+
+// JWT Payload interface
+interface JWTPayload {
+  userId: number;
+  email: string;
+  role: string;
 }
 
 interface CreateUserBody {
@@ -388,5 +397,120 @@ export async function adminRoutes(app: FastifyInstance) {
     }
     
     return reply.send(ok(null, 'Settings updated successfully'));
+  });
+
+  /**
+   * DELETE /admin/urls/clear - Truncate all URLs (admin only)
+   */
+  app.delete('/urls/clear', async (request: FastifyRequest, reply: FastifyReply) => {
+    // Check admin
+    const authHeader = request.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return reply.status(401).send({ success: false, message: 'Unauthorized' });
+    }
+
+    try {
+      const token = authHeader.substring(7);
+      const jwtSecret = process.env.JWT_SECRET || 'change-this-in-production';
+      const decoded = jwt.verify(token, jwtSecret) as JWTPayload;
+
+      if (decoded.role !== 'ADMIN' && decoded.role !== 'admin') {
+        return reply.status(403).send({ success: false, message: 'Admin access required' });
+      }
+    } catch (err) {
+      return reply.status(401).send({ success: false, message: 'Invalid token' });
+    }
+
+    try {
+      // Delete url_hits first (FK constraint)
+      const deleteHits = await prisma.urlHit.deleteMany({});
+
+      // Then delete all URLs
+      const deleteUrls = await prisma.url8.deleteMany({});
+
+      console.log(`[Admin] URLs cleared: ${deleteUrls.count} URLs, ${deleteHits.count} hits`);
+
+      return reply.send(ok({
+        deleted: deleteUrls.count,
+        hitsDeleted: deleteHits.count
+      }, 'All URLs cleared successfully'));
+    } catch (error) {
+      console.error('[Admin] Error clearing URLs:', error);
+      return reply.status(500).send({ success: false, message: 'Failed to clear URLs' });
+    }
+  });
+
+  /**
+   * DELETE /admin/users/clear-non-admins - Delete non-admin users (admin only)
+   */
+  app.delete('/users/clear-non-admins', async (request: FastifyRequest, reply: FastifyReply) => {
+    // Check admin
+    const authHeader = request.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return reply.status(401).send({ success: false, message: 'Unauthorized' });
+    }
+
+    try {
+      const token = authHeader.substring(7);
+      const jwtSecret = process.env.JWT_SECRET || 'change-this-in-production';
+      const decoded = jwt.verify(token, jwtSecret) as JWTPayload;
+
+      if (decoded.role !== 'ADMIN' && decoded.role !== 'admin') {
+        return reply.status(403).send({ success: false, message: 'Admin access required' });
+      }
+    } catch (err) {
+      return reply.status(401).send({ success: false, message: 'Invalid token' });
+    }
+
+    try {
+      // Get all non-admin users
+      const nonAdminUsers = await prisma.user.findMany({
+        where: {
+          OR: [
+            { role: { not: 'ADMIN' } },
+            { isActive: false }
+          ]
+        }
+      });
+
+      // Count admins (protected)
+      const adminCount = await prisma.user.count({
+        where: {
+          role: "ADMIN",
+          isActive: true
+        }
+      });
+
+      // Delete non-admin users
+      let deletedCount = 0;
+      for (const user of nonAdminUsers) {
+        // Delete user sessions first
+        await prisma.userSession.deleteMany({
+          where: { userId: user.id }
+        });
+
+        // Delete user's URLs
+        await prisma.url8.deleteMany({
+          where: { userId: user.id }
+        });
+
+        // Delete user
+        await prisma.user.delete({
+          where: { id: user.id }
+        });
+        deletedCount++;
+      }
+
+      console.log(`[Admin] Non-admin users cleared: ${deletedCount} deleted, ${adminCount} protected`);
+
+      return reply.send(ok({
+        total: nonAdminUsers.length + adminCount,
+        adminsProtected: adminCount,
+        deleted: deletedCount
+      }, 'Non-admin users cleared successfully'));
+    } catch (error) {
+      console.error('[Admin] Error clearing non-admin users:', error);
+      return reply.status(500).send({ success: false, message: 'Failed to clear non-admin users' });
+    }
   });
 }
