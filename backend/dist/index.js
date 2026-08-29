@@ -22,6 +22,7 @@ const auth_middleware_1 = require("./middleware/auth.middleware");
 const auth_routes_1 = require("./routes/auth.routes");
 const url_routes_1 = require("./routes/url.routes");
 const admin_routes_1 = require("./routes/admin.routes");
+const backup_routes_1 = require("./routes/backup.routes");
 const analytics_routes_1 = require("./routes/analytics.routes");
 const public_routes_1 = require("./routes/public.routes");
 const API_PREFIX = process.env.API_PREFIX || '/api8url';
@@ -121,6 +122,7 @@ async function buildApp() {
     await app.register(url_routes_1.urlRoutes, { prefix: `${API_PREFIX}/urls` });
     await app.register(analytics_routes_1.analyticsRoutes, { prefix: `${API_PREFIX}/analytics` });
     await app.register(admin_routes_1.adminRoutes, { prefix: `${API_PREFIX}/admin` });
+    await app.register(backup_routes_1.backupRoutes, { prefix: `${API_PREFIX}/backup` });
     return app;
 }
 async function start() {
