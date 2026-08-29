@@ -32,22 +32,9 @@ async function buildApp() {
             level: process.env.NODE_ENV === 'development' ? 'info' : 'warn',
         },
     });
-    // CORS - Allow all for development, static assets don't need CORS preflight
-    const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173,http://localhost:8002').split(',');
+    // CORS - Allow all origins for production
     await app.register(cors_1.default, {
-        origin: (origin, cb) => {
-            // Allow requests without origin (same-origin, curl, etc.)
-            if (!origin)
-                return cb(null, true);
-            // Allow if origin matches whitelist
-            if (allowedOrigins.includes(origin))
-                return cb(null, true);
-            // In development, allow all origins (safer for dev)
-            if (process.env.NODE_ENV === 'development')
-                return cb(null, true);
-            // Otherwise reject
-            return cb(new Error('Not allowed'), false);
-        },
+        origin: true,
         credentials: true,
     });
     // Rate Limiting
@@ -65,12 +52,6 @@ async function buildApp() {
             };
         },
     });
-    // Serve static files
-    await app.register(static_1.default, {
-        root: publicPath,
-        prefix: '/',
-        decorateReply: false,
-    });
     // Helper to send SPA index.html
     const sendSpaIndex = async (_request, reply) => {
         const indexPath = path_1.default.join(publicPath, 'index.html');
@@ -84,9 +65,48 @@ async function buildApp() {
     app.get('/health', async () => {
         return { status: 'ok', timestamp: new Date().toISOString() };
     });
-    // Public routes FIRST (clean URL redirect) - must be before SPA routes
+    // Serve static files FIRST - before any route handlers  // Serve static files LAST - after all routes
+    await app.register(static_1.default, {
+        root: publicPath,
+        prefix: '/',
+        decorateReply: true,
+    });
+    // Serve specific static files explicitly before public routes
+    app.get('/manifest.webmanifest', async (req, reply) => {
+        const filePath = path_1.default.join(publicPath, 'manifest.webmanifest');
+        if (fs_1.default.existsSync(filePath)) {
+            const content = fs_1.default.readFileSync(filePath);
+            return reply.header('Content-Type', 'application/manifest+json').send(content);
+        }
+        return reply.status(404).send({ success: false, message: 'Not found' });
+    });
+    app.get('/vite.svg', async (req, reply) => {
+        const filePath = path_1.default.join(publicPath, 'vite.svg');
+        if (fs_1.default.existsSync(filePath)) {
+            const content = fs_1.default.readFileSync(filePath);
+            return reply.header('Content-Type', 'image/svg+xml').send(content);
+        }
+        return reply.status(404).send({ success: false, message: 'Not found' });
+    });
+    app.get('/sw.js', async (req, reply) => {
+        const filePath = path_1.default.join(publicPath, 'sw.js');
+        if (fs_1.default.existsSync(filePath)) {
+            const content = fs_1.default.readFileSync(filePath);
+            return reply.header('Content-Type', 'application/javascript').send(content);
+        }
+        return reply.status(404).send({ success: false, message: 'Not found' });
+    });
+    app.get('/registerSW.js', async (req, reply) => {
+        const filePath = path_1.default.join(publicPath, 'registerSW.js');
+        if (fs_1.default.existsSync(filePath)) {
+            const content = fs_1.default.readFileSync(filePath);
+            return reply.header('Content-Type', 'application/javascript').send(content);
+        }
+        return reply.status(404).send({ success: false, message: 'Not found' });
+    });
+    // Public routes FIRST (clean URL redirect)
     await app.register(public_routes_1.publicRoutes);
-    // SPA routes for /kelola/* - registered AFTER public routes
+    // SPA routes for /kelola/*
     app.get('/kelola', async (request, reply) => sendSpaIndex(request, reply));
     app.get('/kelola/', async (request, reply) => sendSpaIndex(request, reply));
     app.get('/kelola/login', async (request, reply) => sendSpaIndex(request, reply));

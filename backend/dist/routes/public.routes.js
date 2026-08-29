@@ -247,8 +247,11 @@ async function publicRoutes(app) {
      */
     app.get('/:shortUrl', { schema: { params: { type: 'object', properties: { shortUrl: { type: 'string' } } } } }, async (request, reply) => {
         const { shortUrl } = request.params;
-        // Skip if it's an API route pattern
-        if (shortUrl.startsWith('api') || shortUrl.startsWith('auth') || shortUrl.startsWith('kelola') || shortUrl.startsWith('f/')) {
+        // Skip if it's an API route or static file
+        const staticExts = ['.svg', '.js', '.css', '.ico', '.png', '.jpg', '.jpeg', '.woff2', '.woff', '.ttf'];
+        const staticFiles = ['manifest.webmanifest', 'sw.js', 'registerSW.js'];
+        if (shortUrl.startsWith('api') || shortUrl.startsWith('auth') || shortUrl.startsWith('kelola') || shortUrl.startsWith('f/') ||
+            staticExts.some(e => shortUrl.endsWith(e)) || staticFiles.includes(shortUrl) || shortUrl.startsWith('workbox-')) {
             return reply.status(404).send({ success: false, message: 'Not found' });
         }
         // Handle QR code request
