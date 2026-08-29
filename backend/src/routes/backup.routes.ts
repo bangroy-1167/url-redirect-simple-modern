@@ -1,19 +1,45 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import prisma from '../config/database'; // Need to check where prisma is exported from
+import jwt from 'jsonwebtoken';
+import prisma from '../config/database';
 import { ok, fail } from '../helpers/response.helper';
 
+// Helper to check admin role
+function isAdmin(user: any): boolean {
+  return user && (user.role === 'ADMIN' || user.role === 'admin');
+}
+
 export async function backupRoutes(app: FastifyInstance) {
-  // Add authentication middleware for all backup routes
-  app.addHook('preHandler', app.authenticate);
+
+  // Helper to authenticate and get user from request
+  const authenticate = async (request: FastifyRequest, reply: FastifyReply) => {
+    const authHeader = request.headers.authorization;
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      reply.status(401).send({ success: false, message: 'Unauthorized: No token provided' });
+      return null;
+    }
+    
+    const token = authHeader.substring(7);
+    const jwtSecret = process.env.JWT_SECRET || 'change-this-in-production';
+    
+    try {
+      const decoded = jwt.verify(token, jwtSecret) as { userId: number; email: string; role: string };
+      return decoded;
+    } catch (err) {
+      reply.status(401).send({ success: false, message: 'Unauthorized: Invalid or expired token' });
+      return null;
+    }
+  };
 
   /**
    * GET /backup/urls - Export URLs
    */
   app.get('/urls', async (request: FastifyRequest, reply: FastifyReply) => {
-    const user = (request as any).user;
+    const user = await authenticate(request, reply);
+    if (!user) return;
 
     let urls;
-    if (user.role === 'ADMIN') {
+    if (isAdmin(user)) {
       urls = await prisma.url8.findMany();
     } else {
       urls = await prisma.url8.findMany({
@@ -28,20 +54,20 @@ export async function backupRoutes(app: FastifyInstance) {
    * POST /backup/urls - Import URLs
    */
   app.post('/urls', async (request: FastifyRequest, reply: FastifyReply) => {
-    const user = (request as any).user;
+    const user = await authenticate(request, reply);
+    if (!user) return;
+
     const { data } = request.body as { data: any[] };
 
     if (!Array.isArray(data)) {
       return reply.status(400).send(fail('Invalid data format. Expected an array.'));
     }
 
-    // For regular users, ensure they only import URLs for themselves
-    // and don't overwrite existing ones if they don't own them
     let importedCount = 0;
 
     for (const item of data) {
       try {
-        const urlData = {
+        const urlData: any = {
           shortUrl: item.shortUrl,
           targetUrl: item.targetUrl,
           title: item.title,
@@ -51,7 +77,7 @@ export async function backupRoutes(app: FastifyInstance) {
           isActive: item.isActive !== undefined ? item.isActive : true,
           hitCounter: item.hitCounter || 0,
           expDate: item.expDate,
-          userId: user.role === 'ADMIN' ? (item.userId || user.userId) : user.userId,
+          userId: isAdmin(user) ? (item.userId || user.userId) : user.userId,
         };
 
         await prisma.url8.upsert({
@@ -68,17 +94,17 @@ export async function backupRoutes(app: FastifyInstance) {
     return reply.send(ok({ count: importedCount }, `Successfully imported ${importedCount} URLs`));
   });
 
-  const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
-    const user = (request as any).user;
-    if (!user || user.role !== 'ADMIN') {
-      return reply.status(403).send(fail('Forbidden: Admin access required'));
-    }
-  };
-
   /**
    * GET /backup/users - Export Users (ADMIN ONLY)
    */
-  app.get('/users', { preHandler: requireAdmin }, async (request: FastifyRequest, reply: FastifyReply) => {
+  app.get('/users', async (request: FastifyRequest, reply: FastifyReply) => {
+    const user = await authenticate(request, reply);
+    if (!user) return;
+
+    if (!isAdmin(user)) {
+      return reply.status(403).send(fail('Forbidden: Admin access required'));
+    }
+
     const users = await prisma.user.findMany();
     return reply.send(ok(users, 'Users exported successfully'));
   });
@@ -86,7 +112,14 @@ export async function backupRoutes(app: FastifyInstance) {
   /**
    * POST /backup/users - Import Users (ADMIN ONLY)
    */
-  app.post('/users', { preHandler: requireAdmin }, async (request: FastifyRequest, reply: FastifyReply) => {
+  app.post('/users', async (request: FastifyRequest, reply: FastifyReply) => {
+    const user = await authenticate(request, reply);
+    if (!user) return;
+
+    if (!isAdmin(user)) {
+      return reply.status(403).send(fail('Forbidden: Admin access required'));
+    }
+
     const { data } = request.body as { data: any[] };
 
     if (!Array.isArray(data)) {
@@ -97,10 +130,10 @@ export async function backupRoutes(app: FastifyInstance) {
     for (const item of data) {
       try {
         await prisma.user.upsert({
-          where: { email: item.email }, // Use email as unique identifier for import
+          where: { email: item.email },
           update: {
             username: item.username,
-            password: item.password, // This is already hashed
+            password: item.password,
             role: item.role,
             isActive: item.isActive !== undefined ? item.isActive : true,
           },
@@ -124,7 +157,14 @@ export async function backupRoutes(app: FastifyInstance) {
   /**
    * GET /backup/settings - Export Settings (ADMIN ONLY)
    */
-  app.get('/settings', { preHandler: requireAdmin }, async (request: FastifyRequest, reply: FastifyReply) => {
+  app.get('/settings', async (request: FastifyRequest, reply: FastifyReply) => {
+    const user = await authenticate(request, reply);
+    if (!user) return;
+
+    if (!isAdmin(user)) {
+      return reply.status(403).send(fail('Forbidden: Admin access required'));
+    }
+
     const settings = await prisma.urRedirectSet.findMany();
     return reply.send(ok(settings, 'Settings exported successfully'));
   });
@@ -132,7 +172,14 @@ export async function backupRoutes(app: FastifyInstance) {
   /**
    * POST /backup/settings - Import Settings (ADMIN ONLY)
    */
-  app.post('/settings', { preHandler: requireAdmin }, async (request: FastifyRequest, reply: FastifyReply) => {
+  app.post('/settings', async (request: FastifyRequest, reply: FastifyReply) => {
+    const user = await authenticate(request, reply);
+    if (!user) return;
+
+    if (!isAdmin(user)) {
+      return reply.status(403).send(fail('Forbidden: Admin access required'));
+    }
+
     const { data } = request.body as { data: any[] };
 
     if (!Array.isArray(data)) {
