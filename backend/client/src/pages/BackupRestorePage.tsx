@@ -16,7 +16,7 @@ interface FilePreview {
 interface RestoreModalProps {
   tableName: string;
   onClose: () => void;
-  onRestore: (file: File, strategy: RestoreStrategy) => Promise<void>;
+  onRestore: (data: any[], strategy: RestoreStrategy, invalidUserAction: string) => Promise<void>;
 }
 
 interface UserInfo {
@@ -66,14 +66,16 @@ function RestoreModal({ tableName, onClose, onRestore }: RestoreModalProps) {
     reader.readAsText(selectedFile);
   };
 
+  const [invalidUserAction, setInvalidUserAction] = useState<string>('skip');
+
   const handleRestore = async () => {
-    if (!file) {
+    if (!preview) {
       setError('Pilih file terlebih dahulu');
       return;
     }
     setLoading(true);
     try {
-      await onRestore(file, strategy);
+      await onRestore(preview, strategy, invalidUserAction);
     } finally {
       setLoading(false);
     }
@@ -121,7 +123,7 @@ function RestoreModal({ tableName, onClose, onRestore }: RestoreModalProps) {
               ) : (
                 <>
                   <Upload className="w-8 h-8 mx-auto text-gray-400 mb-2" />
-                  <p className="text-sm text-gray-500">Klik atau drag file ke sini</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 dark:text-gray-400 dark:text-gray-400">Klik atau drag file ke sini</p>
                 </>
               )}
             </div>
@@ -129,22 +131,37 @@ function RestoreModal({ tableName, onClose, onRestore }: RestoreModalProps) {
 
           {/* Preview Count */}
           {preview && (
-            <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-              <p className="text-sm text-gray-600">
+            <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-900 dark:bg-gray-900 dark:bg-gray-900 rounded-lg">
+              <p className="text-sm text-gray-600 dark:text-gray-300 dark:text-gray-300 dark:text-gray-300">
                 File berisi <strong>{preview.length}</strong> record(s)
               </p>
             </div>
           )}
 
+          {tableName === 'URLs' && (
+            <div className="mb-4">
+              <label className="block text-sm font-medium mb-2 dark:text-gray-200">Resolusi Referensi User (Jika Tidak Ditemukan)</label>
+              <select
+                value={invalidUserAction}
+                onChange={(e) => setInvalidUserAction(e.target.value)}
+                className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2"
+              >
+                <option value="skip">Skip Restore (Abaikan URL)</option>
+                <option value="assign_to_me">Tugaskan ke saya (Admin aktif)</option>
+                <option value="create_inactive">Buat user baru (NonAktif)</option>
+              </select>
+            </div>
+          )}
+
           {/* Strategy Selection */}
           <div className="mb-4">
-            <label className="block text-sm font-medium mb-2">Strategi Restore</label>
+            <label className="block text-sm font-medium mb-2 dark:text-gray-200">Strategi Restore</label>
             <div className="space-y-2">
               {(Object.keys(strategyLabels) as RestoreStrategy[]).map((key) => (
                 <label
                   key={key}
                   className={`flex items-start gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${
-                    strategy === key ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 hover:bg-gray-50'
+                    strategy === key ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 hover:bg-gray-50 dark:bg-gray-900 dark:bg-gray-900 dark:bg-gray-900'
                   }`}
                 >
                   <input
@@ -157,7 +174,7 @@ function RestoreModal({ tableName, onClose, onRestore }: RestoreModalProps) {
                   />
                   <div>
                     <p className="font-medium text-sm">{strategyLabels[key].title}</p>
-                    <p className="text-xs text-gray-500">{strategyLabels[key].desc}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 dark:text-gray-400 dark:text-gray-400">{strategyLabels[key].desc}</p>
                   </div>
                 </label>
               ))}
@@ -176,7 +193,7 @@ function RestoreModal({ tableName, onClose, onRestore }: RestoreModalProps) {
           <div className="flex gap-3">
             <button
               onClick={onClose}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 dark:bg-gray-900 dark:bg-gray-900 dark:bg-gray-900"
             >
               Batal
             </button>
@@ -227,12 +244,12 @@ function ConfirmModal({
             )}
             <h3 className="text-lg font-semibold">{title}</h3>
           </div>
-          <p className="text-gray-600 mb-4">{message}</p>
+          <p className="text-gray-600 dark:text-gray-300 dark:text-gray-300 dark:text-gray-300 mb-4">{message}</p>
           {details && details.length > 0 && (
-            <div className="mb-4 p-3 bg-gray-50 rounded-lg max-h-48 overflow-y-auto">
+            <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-900 dark:bg-gray-900 dark:bg-gray-900 rounded-lg max-h-48 overflow-y-auto">
               <ul className="text-sm space-y-1">
                 {details.map((detail, idx) => (
-                  <li key={idx} className="text-gray-700">• {detail}</li>
+                  <li key={idx} className="text-gray-700 dark:text-gray-200 dark:text-gray-200 dark:text-gray-200">• {detail}</li>
                 ))}
               </ul>
             </div>
@@ -240,7 +257,7 @@ function ConfirmModal({
           <div className="flex gap-3">
             <button
               onClick={onCancel}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 dark:bg-gray-900 dark:bg-gray-900 dark:bg-gray-900"
             >
               {cancelLabel}
             </button>
@@ -279,11 +296,11 @@ function ResultModal({
           </div>
           <div className="space-y-2 mb-4">
             {results.map((result, idx) => (
-              <div key={idx} className="flex justify-between p-2 bg-gray-50 rounded">
-                <span className="text-gray-600">{result.label}</span>
+              <div key={idx} className="flex justify-between p-2 bg-gray-50 dark:bg-gray-900 dark:bg-gray-900 dark:bg-gray-900 rounded">
+                <span className="text-gray-600 dark:text-gray-300 dark:text-gray-300 dark:text-gray-300">{result.label}</span>
                 <span className={`font-medium ${
                   result.type === 'success' ? 'text-green-600' :
-                  result.type === 'error' ? 'text-red-600' : 'text-gray-900'
+                  result.type === 'error' ? 'text-red-600' : 'text-gray-900 dark:text-white dark:text-white dark:text-white'
                 }`}>
                   {result.value}
                 </span>
@@ -348,10 +365,10 @@ export default function BackupRestorePage() {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
 
-      const data = await response.json();
+      const responseData = await response.json();
 
-      if (data.success) {
-        const jsonString = JSON.stringify(data.data, null, 2);
+      if (responseData.success) {
+        const jsonString = JSON.stringify(responseData.data, null, 2);
         const blob = new Blob([jsonString], { type: 'application/json' });
         const href = URL.createObjectURL(blob);
         const link = document.createElement('a');
@@ -366,7 +383,7 @@ export default function BackupRestorePage() {
 
         showMessage(`Berhasil export ${type}`, 'success');
       } else {
-        showMessage(`Gagal export ${type}: ${data.message}`, 'error');
+        showMessage(`Gagal export ${type}: ${responseData.message}`, 'error');
       }
     } catch (err) {
       showMessage(`Error exporting ${type}`, 'error');
@@ -419,20 +436,20 @@ export default function BackupRestorePage() {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
           });
-          const data = await response.json();
+          const responseData = await response.json();
 
-          if (data.success) {
+          if (responseData.success) {
             setShowResultModal({
               show: true,
               title: '✅ URLs Berhasil Dikosongkan',
               results: [
                 { label: 'Status', value: 'Berhasil', type: 'success' },
-                { label: 'URLs dihapus', value: data.data?.deleted || 0 },
-                { label: 'Hits dihapus', value: data.data?.hitsDeleted || 0 }
+                { label: 'URLs dihapus', value: responseData.data?.deleted || 0 },
+                { label: 'Hits dihapus', value: responseData.data?.hitsDeleted || 0 }
               ]
             });
           } else {
-            showMessage(data.message || 'Gagal mengosongkan URLs', 'error');
+            showMessage(responseData.message || 'Gagal mengosongkan URLs', 'error');
           }
         } catch {
           showMessage('Error saat mengosongkan URLs', 'error');
@@ -451,10 +468,10 @@ export default function BackupRestorePage() {
       const response = await fetch('/api8url/admin/users', {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
-      const data = await response.json();
+      const responseData = await response.json();
 
-      if (data.success && data.data) {
-        const users: UserInfo[] = data.data;
+      if (responseData.success && responseData.data) {
+        const users: UserInfo[] = responseData.data;
         const nonAdmins = users.filter(u => u.role !== 'ADMIN' || !u.is_active);
         const admins = users.filter(u => u.role === 'ADMIN' && u.is_active);
 
@@ -520,24 +537,23 @@ export default function BackupRestorePage() {
   };
 
   // Restore handler
-  const handleRestore = (type: BackupType) => async (file: File, strategy: RestoreStrategy) => {
+  const handleRestore = (type: BackupType) => async (data: any[], strategy: RestoreStrategy, invalidUserAction: string) => {
     setShowRestoreModal({ show: false, table: '' });
     setLoading(prev => ({ ...prev, [`restore_${type}`]: true }));
 
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('strategy', strategy);
-
       const response = await fetch(`/api8url/backup/${type}`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-        body: formData
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ data, strategy, invalidUserAction })
       });
 
-      const data = await response.json();
+      const responseData = await response.json();
 
-      if (data.success) {
+      if (responseData.success) {
         const strategyLabels: Record<RestoreStrategy, string> = {
           replace: 'Replace (Truncate + Insert)',
           insert_unique: 'Insert Unique',
@@ -549,14 +565,14 @@ export default function BackupRestorePage() {
           title: `✅ ${type.charAt(0).toUpperCase() + type.slice(1)} Berhasil Di-restore`,
           results: [
             { label: 'Strategi', value: strategyLabels[strategy] },
-            { label: 'Total Records', value: data.data?.total || 0 },
-            { label: 'Inserted', value: data.data?.inserted || 0, type: 'success' },
-            { label: 'Updated', value: data.data?.updated || 0, type: 'info' },
-            { label: 'Skipped', value: data.data?.skipped || 0 }
+            { label: 'Total Records', value: responseData.data?.total || 0 },
+            { label: 'Inserted', value: responseData.data?.inserted || 0, type: 'success' },
+            { label: 'Updated', value: responseData.data?.updated || 0, type: 'info' },
+            { label: 'Skipped', value: responseData.data?.skipped || 0 }
           ]
         });
       } else {
-        showMessage(data.message || 'Gagal restore data', 'error');
+        showMessage(responseData.message || 'Gagal restore data', 'error');
       }
     } catch {
       showMessage('Error saat restore data', 'error');
@@ -580,15 +596,15 @@ export default function BackupRestorePage() {
       {/* Backup Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* URLs Backup Card */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 bg-blue-50 rounded-lg">
               <Database className="w-6 h-6 text-blue-600" />
             </div>
             <h3 className="text-lg font-semibold">URLs Data</h3>
           </div>
-          <p className="text-sm text-gray-500 mb-6">
-            Backup dan restore data URLs. Export semua short URLs atau import dari file backup.
+          <p className="text-sm text-gray-500 dark:text-gray-400 dark:text-gray-400 dark:text-gray-400 mb-6">
+            Backup dan restore data URLs. Backup semua short URLs menjadi file JSON atau restore data.
           </p>
 
           <div className="flex flex-col gap-3">
@@ -598,32 +614,8 @@ export default function BackupRestorePage() {
               className="flex items-center justify-center gap-2 w-full py-2 px-4 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg transition-colors font-medium border border-blue-200 disabled:opacity-50"
             >
               {loading.export_urls ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              Export URLs
+              Backup URLs
             </button>
-
-            <div className="relative">
-              <input
-                type="file"
-                ref={fileInputRefs.urls}
-                accept=".json,application/json"
-                onChange={(e) => handleFileChange(e, 'urls')}
-                className="hidden"
-              />
-              <label
-                htmlFor="import-urls"
-                className="flex items-center justify-center gap-2 w-full py-2 px-4 bg-white text-gray-700 hover:bg-gray-50 rounded-lg transition-colors font-medium border border-gray-300 cursor-pointer"
-              >
-                <Upload className="w-4 h-4" />
-                Import URLs
-              </label>
-              <input
-                id="import-urls"
-                type="file"
-                accept=".json,application/json"
-                onChange={(e) => handleFileChange(e, 'urls')}
-                className="hidden"
-              />
-            </div>
 
             <button
               onClick={handleClearUrls}
@@ -646,14 +638,14 @@ export default function BackupRestorePage() {
         </div>
 
         {/* Users Backup Card */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 bg-emerald-50 rounded-lg">
               <Database className="w-6 h-6 text-emerald-600" />
             </div>
             <h3 className="text-lg font-semibold">Users Data</h3>
           </div>
-          <p className="text-sm text-gray-500 mb-6">
+          <p className="text-sm text-gray-500 dark:text-gray-400 dark:text-gray-400 dark:text-gray-400 mb-6">
             Backup dan restore data users. Admin aktif akan dipertahankan saat restore.
           </p>
 
@@ -664,32 +656,8 @@ export default function BackupRestorePage() {
               className="flex items-center justify-center gap-2 w-full py-2 px-4 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg transition-colors font-medium border border-emerald-200 disabled:opacity-50"
             >
               {loading.export_users ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              Export Users
+              Backup Users
             </button>
-
-            <div className="relative">
-              <input
-                type="file"
-                ref={fileInputRefs.users}
-                accept=".json,application/json"
-                onChange={(e) => handleFileChange(e, 'users')}
-                className="hidden"
-              />
-              <label
-                htmlFor="import-users"
-                className="flex items-center justify-center gap-2 w-full py-2 px-4 bg-white text-gray-700 hover:bg-gray-50 rounded-lg transition-colors font-medium border border-gray-300 cursor-pointer"
-              >
-                <Upload className="w-4 h-4" />
-                Import Users
-              </label>
-              <input
-                id="import-users"
-                type="file"
-                accept=".json,application/json"
-                onChange={(e) => handleFileChange(e, 'users')}
-                className="hidden"
-              />
-            </div>
 
             <button
               onClick={handleClearUsers}
@@ -713,14 +681,14 @@ export default function BackupRestorePage() {
 
         {/* Settings Backup Card (Admin Only) */}
         {user?.role === 'ADMIN' && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="p-2 bg-orange-50 rounded-lg">
                 <FileJson className="w-6 h-6 text-orange-600" />
               </div>
               <h3 className="text-lg font-semibold">Settings Data</h3>
             </div>
-            <p className="text-sm text-gray-500 mb-6">
+            <p className="text-sm text-gray-500 dark:text-gray-400 dark:text-gray-400 dark:text-gray-400 mb-6">
               Backup dan restore pengaturan aplikasi.
             </p>
 
@@ -731,32 +699,8 @@ export default function BackupRestorePage() {
                 className="flex items-center justify-center gap-2 w-full py-2 px-4 bg-orange-50 text-orange-700 hover:bg-orange-100 rounded-lg transition-colors font-medium border border-orange-200 disabled:opacity-50"
               >
                 {loading.export_settings ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                Export Settings
+                Backup Settings
               </button>
-
-              <div className="relative">
-                <input
-                  type="file"
-                  ref={fileInputRefs.settings}
-                  accept=".json,application/json"
-                  onChange={(e) => handleFileChange(e, 'settings')}
-                  className="hidden"
-                />
-                <label
-                  htmlFor="import-settings"
-                  className="flex items-center justify-center gap-2 w-full py-2 px-4 bg-white text-gray-700 hover:bg-gray-50 rounded-lg transition-colors font-medium border border-gray-300 cursor-pointer"
-                >
-                  <Upload className="w-4 h-4" />
-                  Import Settings
-                </label>
-                <input
-                  id="import-settings"
-                  type="file"
-                  accept=".json,application/json"
-                  onChange={(e) => handleFileChange(e, 'settings')}
-                  className="hidden"
-                />
-              </div>
 
               <button
                 onClick={() => setShowRestoreModal({ show: true, table: 'Settings' })}
