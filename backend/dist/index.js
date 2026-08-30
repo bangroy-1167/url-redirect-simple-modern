@@ -115,6 +115,7 @@ async function buildApp() {
     app.get('/kelola/urls', async (request, reply) => sendSpaIndex(request, reply));
     app.get('/kelola/users', async (request, reply) => sendSpaIndex(request, reply));
     app.get('/kelola/settings', async (request, reply) => sendSpaIndex(request, reply));
+    app.get('/kelola/backup', async (request, reply) => sendSpaIndex(request, reply));
     // Register auth middleware
     await app.register(auth_middleware_1.authMiddleware);
     // API routes

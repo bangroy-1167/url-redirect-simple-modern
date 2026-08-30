@@ -4,41 +4,93 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.backupRoutes = backupRoutes;
-const database_1 = __importDefault(require("../config/database")); // Need to check where prisma is exported from
+const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
+const database_1 = __importDefault(require("../config/database"));
 const response_helper_1 = require("../helpers/response.helper");
+// Inline authentication helper
+async function authenticate(request, reply) {
+    const authHeader = request.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        reply.status(401).send({ success: false, message: 'Unauthorized: No token provided' });
+        return null;
+    }
+    const token = authHeader.substring(7);
+    const jwtSecret = process.env.JWT_SECRET || 'change-this-in-production';
+    try {
+        const decoded = jsonwebtoken_1.default.verify(token, jwtSecret);
+        return decoded;
+    }
+    catch {
+        reply.status(401).send({ success: false, message: 'Unauthorized: Invalid or expired token' });
+        return null;
+    }
+}
 async function backupRoutes(app) {
-    // Add authentication middleware for all backup routes
-    app.addHook('preHandler', app.authenticate);
-    /**
-     * GET /backup/urls - Export URLs
-     */
     app.get('/urls', async (request, reply) => {
-        const user = request.user;
+        const user = await authenticate(request, reply);
+        if (!user)
+            return;
         let urls;
-        if (user.role === 'ADMIN') {
-            urls = await database_1.default.url8.findMany();
+        if (user.role === 'ADMIN' || user.role === 'admin') {
+            urls = await database_1.default.url8.findMany({ orderBy: { createdAt: 'desc' } });
         }
         else {
-            urls = await database_1.default.url8.findMany({
-                where: { userId: user.userId }
-            });
+            urls = await database_1.default.url8.findMany({ where: { userId: user.userId }, orderBy: { createdAt: 'desc' } });
         }
         return reply.send((0, response_helper_1.ok)(urls, 'URLs exported successfully'));
     });
-    /**
-     * POST /backup/urls - Import URLs
-     */
     app.post('/urls', async (request, reply) => {
-        const user = request.user;
-        const { data } = request.body;
+        const user = await authenticate(request, reply);
+        if (!user)
+            return;
+        const { data, strategy = 'upsert', invalidUserAction = 'skip' } = request.body;
         if (!Array.isArray(data)) {
             return reply.status(400).send((0, response_helper_1.fail)('Invalid data format. Expected an array.'));
         }
-        // For regular users, ensure they only import URLs for themselves
-        // and don't overwrite existing ones if they don't own them
-        let importedCount = 0;
+        let inserted = 0, updated = 0, skipped = 0;
+        // Strategy: replace (truncate + insert)
+        if (strategy === 'replace') {
+            if (user.role === 'ADMIN' || user.role === 'admin') {
+                await database_1.default.urlHit.deleteMany({});
+                await database_1.default.url8.deleteMany({});
+            }
+            else {
+                await database_1.default.url8.deleteMany({ where: { userId: user.userId } });
+            }
+        }
+        // Cache valid users to validate userId
+        const validUsers = await database_1.default.user.findMany({ select: { id: true, email: true, username: true } });
+        const validUserIds = new Set(validUsers.map(u => u.id));
         for (const item of data) {
+            if (!item.shortUrl) {
+                skipped++;
+                continue;
+            }
             try {
+                let targetUserId = (user.role === 'ADMIN' || user.role === 'admin') ? (item.userId || user.userId) : user.userId;
+                // Handle invalid userId
+                if ((user.role === 'ADMIN' || user.role === 'admin') && targetUserId !== null && !validUserIds.has(targetUserId)) {
+                    if (invalidUserAction === 'skip') {
+                        skipped++;
+                        continue;
+                    }
+                    else if (invalidUserAction === 'assign_to_me') {
+                        targetUserId = user.userId;
+                    }
+                    else if (invalidUserAction === 'create_inactive') {
+                        const newUser = await database_1.default.user.create({
+                            data: {
+                                username: `restored_user_${targetUserId}_${Date.now()}`,
+                                email: `restored_${targetUserId}_${Date.now()}@example.com`,
+                                password: '',
+                                isActive: false,
+                                role: 'USER'
+                            }
+                        });
+                        validUserIds.add(newUser.id);
+                        targetUserId = newUser.id;
+                    }
+                }
                 const urlData = {
                     shortUrl: item.shortUrl,
                     targetUrl: item.targetUrl,
@@ -49,101 +101,133 @@ async function backupRoutes(app) {
                     isActive: item.isActive !== undefined ? item.isActive : true,
                     hitCounter: item.hitCounter || 0,
                     expDate: item.expDate,
-                    userId: user.role === 'ADMIN' ? (item.userId || user.userId) : user.userId,
+                    userId: targetUserId,
                 };
-                await database_1.default.url8.upsert({
-                    where: { shortUrl: item.shortUrl },
-                    update: urlData,
-                    create: urlData,
-                });
-                importedCount++;
+                const existing = await database_1.default.url8.findUnique({ where: { shortUrl: item.shortUrl } });
+                if (strategy === 'insert_unique') {
+                    if (existing) {
+                        skipped++;
+                        continue;
+                    }
+                    await database_1.default.url8.create({ data: urlData });
+                    inserted++;
+                }
+                else if (existing) {
+                    await database_1.default.url8.update({ where: { shortUrl: item.shortUrl }, data: urlData });
+                    updated++;
+                }
+                else {
+                    await database_1.default.url8.create({ data: urlData });
+                    inserted++;
+                }
             }
             catch (err) {
-                console.error('Failed to import URL:', item.shortUrl, err);
+                console.error('Failed to restore URL:', item.shortUrl, err);
+                skipped++;
             }
         }
-        return reply.send((0, response_helper_1.ok)({ count: importedCount }, `Successfully imported ${importedCount} URLs`));
+        console.log(`[Backup] URLs restored: strategy=${strategy}, inserted=${inserted}, updated=${updated}, skipped=${skipped}`);
+        return reply.send((0, response_helper_1.ok)({ total: data.length, strategy, inserted, updated, skipped }, `Restored URLs`));
     });
-    const requireAdmin = async (request, reply) => {
-        const user = request.user;
-        if (!user || user.role !== 'ADMIN') {
+    app.get('/users', async (request, reply) => {
+        const user = await authenticate(request, reply);
+        if (!user)
+            return;
+        if (user.role !== 'ADMIN' && user.role !== 'admin') {
             return reply.status(403).send((0, response_helper_1.fail)('Forbidden: Admin access required'));
         }
-    };
-    /**
-     * GET /backup/users - Export Users (ADMIN ONLY)
-     */
-    app.get('/users', { preHandler: requireAdmin }, async (request, reply) => {
-        const users = await database_1.default.user.findMany();
+        const users = await database_1.default.user.findMany({
+            select: { id: true, username: true, email: true, role: true, isActive: true, createdAt: true, updatedAt: true }
+        });
         return reply.send((0, response_helper_1.ok)(users, 'Users exported successfully'));
     });
-    /**
-     * POST /backup/users - Import Users (ADMIN ONLY)
-     */
-    app.post('/users', { preHandler: requireAdmin }, async (request, reply) => {
-        const { data } = request.body;
+    app.post('/users', async (request, reply) => {
+        const user = await authenticate(request, reply);
+        if (!user)
+            return;
+        if (user.role !== 'ADMIN' && user.role !== 'admin') {
+            return reply.status(403).send((0, response_helper_1.fail)('Forbidden: Admin access required'));
+        }
+        const { data, strategy = 'upsert' } = request.body;
         if (!Array.isArray(data)) {
             return reply.status(400).send((0, response_helper_1.fail)('Invalid data format. Expected an array.'));
         }
-        let importedCount = 0;
+        let inserted = 0, updated = 0, skipped = 0;
         for (const item of data) {
             try {
-                await database_1.default.user.upsert({
-                    where: { email: item.email }, // Use email as unique identifier for import
-                    update: {
-                        username: item.username,
-                        password: item.password, // This is already hashed
-                        role: item.role,
-                        isActive: item.isActive !== undefined ? item.isActive : true,
-                    },
-                    create: {
-                        username: item.username,
-                        email: item.email,
-                        password: item.password,
-                        role: item.role,
-                        isActive: item.isActive !== undefined ? item.isActive : true,
-                    },
-                });
-                importedCount++;
+                const existing = await database_1.default.user.findUnique({ where: { email: item.email } });
+                if (strategy === 'insert_unique' && existing) {
+                    skipped++;
+                    continue;
+                }
+                if (existing) {
+                    await database_1.default.user.update({ where: { email: item.email }, data: { username: item.username, password: item.password, role: item.role, isActive: item.isActive !== undefined ? item.isActive : true } });
+                    updated++;
+                }
+                else {
+                    await database_1.default.user.create({ data: { username: item.username, email: item.email, password: item.password, role: item.role || 'USER', isActive: item.isActive !== undefined ? item.isActive : true } });
+                    inserted++;
+                }
             }
             catch (err) {
-                console.error('Failed to import user:', item.email, err);
+                console.error('Failed to restore user:', item.email, err);
+                skipped++;
             }
         }
-        return reply.send((0, response_helper_1.ok)({ count: importedCount }, `Successfully imported ${importedCount} users`));
+        return reply.send((0, response_helper_1.ok)({ total: data.length, inserted, updated, skipped }, `Restored users`));
     });
-    /**
-     * GET /backup/settings - Export Settings (ADMIN ONLY)
-     */
-    app.get('/settings', { preHandler: requireAdmin }, async (request, reply) => {
+    app.get('/settings', async (request, reply) => {
+        const user = await authenticate(request, reply);
+        if (!user)
+            return;
+        if (user.role !== 'ADMIN' && user.role !== 'admin') {
+            return reply.status(403).send((0, response_helper_1.fail)('Forbidden: Admin access required'));
+        }
         const settings = await database_1.default.urRedirectSet.findMany();
         return reply.send((0, response_helper_1.ok)(settings, 'Settings exported successfully'));
     });
-    /**
-     * POST /backup/settings - Import Settings (ADMIN ONLY)
-     */
-    app.post('/settings', { preHandler: requireAdmin }, async (request, reply) => {
-        const { data } = request.body;
+    app.post('/settings', async (request, reply) => {
+        const user = await authenticate(request, reply);
+        if (!user)
+            return;
+        if (user.role !== 'ADMIN' && user.role !== 'admin') {
+            return reply.status(403).send((0, response_helper_1.fail)('Forbidden: Admin access required'));
+        }
+        const { data, strategy = 'upsert' } = request.body;
         if (!Array.isArray(data)) {
             return reply.status(400).send((0, response_helper_1.fail)('Invalid data format. Expected an array.'));
         }
-        let importedCount = 0;
+        let inserted = 0, updated = 0, skipped = 0;
+        if (strategy === 'replace') {
+            await database_1.default.urRedirectSet.deleteMany({});
+        }
         for (const item of data) {
-            if (!item.key)
+            if (!item.key) {
+                skipped++;
                 continue;
+            }
             try {
-                await database_1.default.urRedirectSet.upsert({
-                    where: { key: item.key },
-                    update: { value: String(item.value) },
-                    create: { key: item.key, value: String(item.value) },
-                });
-                importedCount++;
+                const existing = await database_1.default.urRedirectSet.findUnique({ where: { key: item.key } });
+                if (existing) {
+                    if (strategy === 'upsert') {
+                        await database_1.default.urRedirectSet.update({ where: { key: item.key }, data: { value: String(item.value) } });
+                        updated++;
+                    }
+                    else {
+                        skipped++;
+                    }
+                }
+                else {
+                    await database_1.default.urRedirectSet.create({ data: { key: item.key, value: String(item.value), category: item.category } });
+                    inserted++;
+                }
             }
             catch (err) {
-                console.error('Failed to import setting:', item.key, err);
+                console.error('Failed to restore setting:', item.key, err);
+                skipped++;
             }
         }
-        return reply.send((0, response_helper_1.ok)({ count: importedCount }, `Successfully imported ${importedCount} settings`));
+        return reply.send((0, response_helper_1.ok)({ total: data.length, inserted, updated, skipped }, `Restored settings`));
     });
 }
 //# sourceMappingURL=backup.routes.js.map

@@ -1,23 +1,44 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import jwt from 'jsonwebtoken';
 import prisma from '../config/database';
 import { ok, fail } from '../helpers/response.helper';
 
+// Inline authentication helper
+async function authenticate(request: FastifyRequest, reply: FastifyReply) {
+  const authHeader = request.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    reply.status(401).send({ success: false, message: 'Unauthorized: No token provided' });
+    return null;
+  }
+  const token = authHeader.substring(7);
+  const jwtSecret = process.env.JWT_SECRET || 'change-this-in-production';
+  try {
+    const decoded = jwt.verify(token, jwtSecret) as { userId: number; email: string; role: string };
+    return decoded;
+  } catch {
+    reply.status(401).send({ success: false, message: 'Unauthorized: Invalid or expired token' });
+    return null;
+  }
+}
+
 export async function backupRoutes(app: FastifyInstance) {
-  app.addHook('preHandler', app.authenticate);
 
   app.get('/urls', async (request: FastifyRequest, reply: FastifyReply) => {
-    const user = (request as any).user;
+    const user = await authenticate(request, reply);
+    if (!user) return;
     let urls;
-    if (user.role === 'ADMIN') {
-      urls = await prisma.url8.findMany();
+    if (user.role === 'ADMIN' || user.role === 'admin') {
+      urls = await prisma.url8.findMany({ orderBy: { createdAt: 'desc' } });
     } else {
-      urls = await prisma.url8.findMany({ where: { userId: user.userId } });
+      urls = await prisma.url8.findMany({ where: { userId: user.userId }, orderBy: { createdAt: 'desc' } });
     }
     return reply.send(ok(urls, 'URLs exported successfully'));
   });
 
   app.post('/urls', async (request: FastifyRequest, reply: FastifyReply) => {
-    const user = (request as any).user;
+    const user = await authenticate(request, reply);
+    if (!user) return;
+
     const { data, strategy = 'upsert', invalidUserAction = 'skip' } = request.body as {
       data: any[];
       strategy: 'replace' | 'insert_unique' | 'upsert';
@@ -28,19 +49,19 @@ export async function backupRoutes(app: FastifyInstance) {
       return reply.status(400).send(fail('Invalid data format. Expected an array.'));
     }
 
-    let inserted = 0;
-    let updated = 0;
-    let skipped = 0;
+    let inserted = 0, updated = 0, skipped = 0;
 
+    // Strategy: replace (truncate + insert)
     if (strategy === 'replace') {
-      if (user.role === 'ADMIN') {
-        await prisma.url8.deleteMany();
+      if (user.role === 'ADMIN' || user.role === 'admin') {
+        await prisma.urlHit.deleteMany({});
+        await prisma.url8.deleteMany({});
       } else {
         await prisma.url8.deleteMany({ where: { userId: user.userId } });
       }
     }
 
-    // cache users to validate userId
+    // Cache valid users to validate userId
     const validUsers = await prisma.user.findMany({ select: { id: true, email: true, username: true } });
     const validUserIds = new Set(validUsers.map(u => u.id));
 
@@ -50,9 +71,10 @@ export async function backupRoutes(app: FastifyInstance) {
         continue;
       }
       try {
-        let targetUserId = user.role === 'ADMIN' ? (item.userId || user.userId) : user.userId;
+        let targetUserId = (user.role === 'ADMIN' || user.role === 'admin') ? (item.userId || user.userId) : user.userId;
 
-        if (user.role === 'ADMIN' && targetUserId !== null && !validUserIds.has(targetUserId)) {
+        // Handle invalid userId
+        if ((user.role === 'ADMIN' || user.role === 'admin') && targetUserId !== null && !validUserIds.has(targetUserId)) {
           if (invalidUserAction === 'skip') {
             skipped++;
             continue;
@@ -61,8 +83,8 @@ export async function backupRoutes(app: FastifyInstance) {
           } else if (invalidUserAction === 'create_inactive') {
             const newUser = await prisma.user.create({
               data: {
-                username: `restored_user_\${targetUserId}_\${Date.now()}`,
-                email: `restored_\${targetUserId}_\${Date.now()}@example.com`,
+                username: `restored_user_${targetUserId}_${Date.now()}`,
+                email: `restored_${targetUserId}_${Date.now()}@example.com`,
                 password: '',
                 isActive: false,
                 role: 'USER'
@@ -73,7 +95,7 @@ export async function backupRoutes(app: FastifyInstance) {
           }
         }
 
-        const urlData = {
+        const urlData: any = {
           shortUrl: item.shortUrl,
           targetUrl: item.targetUrl,
           title: item.title,
@@ -82,161 +104,115 @@ export async function backupRoutes(app: FastifyInstance) {
           password: item.password,
           isActive: item.isActive !== undefined ? item.isActive : true,
           hitCounter: item.hitCounter || 0,
-          expDate: item.expDate ? new Date(item.expDate) : null,
+          expDate: item.expDate,
           userId: targetUserId,
         };
 
         const existing = await prisma.url8.findUnique({ where: { shortUrl: item.shortUrl } });
 
-        if (strategy === 'insert_unique' || strategy === 'replace') {
-          if (!existing) {
-            await prisma.url8.create({ data: urlData });
-            inserted++;
-          } else {
-            skipped++;
-          }
-        } else if (strategy === 'upsert') {
-          if (existing) {
-            await prisma.url8.update({ where: { shortUrl: item.shortUrl }, data: urlData });
-            updated++;
-          } else {
-            await prisma.url8.create({ data: urlData });
-            inserted++;
-          }
+        if (strategy === 'insert_unique') {
+          if (existing) { skipped++; continue; }
+          await prisma.url8.create({ data: urlData });
+          inserted++;
+        } else if (existing) {
+          await prisma.url8.update({ where: { shortUrl: item.shortUrl }, data: urlData });
+          updated++;
+        } else {
+          await prisma.url8.create({ data: urlData });
+          inserted++;
         }
       } catch (err) {
-        console.error('Failed to import URL:', item.shortUrl, err);
+        console.error('Failed to restore URL:', item.shortUrl, err);
         skipped++;
       }
     }
 
-    return reply.send(ok({ total: data.length, inserted, updated, skipped }, `Successfully restored URLs`));
+    console.log(`[Backup] URLs restored: strategy=${strategy}, inserted=${inserted}, updated=${updated}, skipped=${skipped}`);
+    return reply.send(ok({ total: data.length, strategy, inserted, updated, skipped }, `Restored URLs`));
   });
 
-  const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
-    const user = (request as any).user;
-    if (!user || user.role !== 'ADMIN') {
+  app.get('/users', async (request: FastifyRequest, reply: FastifyReply) => {
+    const user = await authenticate(request, reply);
+    if (!user) return;
+    if (user.role !== 'ADMIN' && user.role !== 'admin') {
       return reply.status(403).send(fail('Forbidden: Admin access required'));
     }
-  };
-
-  app.get('/users', { preHandler: requireAdmin }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const users = await prisma.user.findMany();
+    const users = await prisma.user.findMany({
+      select: { id: true, username: true, email: true, role: true, isActive: true, createdAt: true, updatedAt: true }
+    });
     return reply.send(ok(users, 'Users exported successfully'));
   });
 
-  app.post('/users', { preHandler: requireAdmin }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const { data, strategy = 'upsert' } = request.body as {
-      data: any[];
-      strategy: 'replace' | 'insert_unique' | 'upsert';
-    };
+  app.post('/users', async (request: FastifyRequest, reply: FastifyReply) => {
+    const user = await authenticate(request, reply);
+    if (!user) return;
+    if (user.role !== 'ADMIN' && user.role !== 'admin') {
+      return reply.status(403).send(fail('Forbidden: Admin access required'));
+    }
 
+    const { data, strategy = 'upsert' } = request.body as { data: any[]; strategy: string };
     if (!Array.isArray(data)) {
       return reply.status(400).send(fail('Invalid data format. Expected an array.'));
     }
 
-    let inserted = 0;
-    let updated = 0;
-    let skipped = 0;
-
-    if (strategy === 'replace') {
-      await prisma.user.deleteMany({ where: { role: { not: 'ADMIN' } } });
-    }
-
+    let inserted = 0, updated = 0, skipped = 0;
     for (const item of data) {
-      if (!item.email || !item.username) {
-        skipped++;
-        continue;
-      }
       try {
-        const userData = {
-          username: item.username,
-          email: item.email,
-          password: item.password,
-          role: item.role,
-          isActive: item.isActive !== undefined ? item.isActive : true,
-        };
-
         const existing = await prisma.user.findUnique({ where: { email: item.email } });
-
-        if (strategy === 'insert_unique' || strategy === 'replace') {
-          if (!existing) {
-            await prisma.user.create({ data: userData });
-            inserted++;
-          } else {
-            skipped++;
-          }
-        } else if (strategy === 'upsert') {
-          if (existing) {
-            await prisma.user.update({ where: { email: item.email }, data: userData });
-            updated++;
-          } else {
-            await prisma.user.create({ data: userData });
-            inserted++;
-          }
+        if (strategy === 'insert_unique' && existing) { skipped++; continue; }
+        if (existing) {
+          await prisma.user.update({ where: { email: item.email }, data: { username: item.username, password: item.password, role: item.role, isActive: item.isActive !== undefined ? item.isActive : true } });
+          updated++;
+        } else {
+          await prisma.user.create({ data: { username: item.username, email: item.email, password: item.password, role: item.role || 'USER', isActive: item.isActive !== undefined ? item.isActive : true } });
+          inserted++;
         }
-      } catch (err) {
-        console.error('Failed to import user:', item.email, err);
-        skipped++;
-      }
+      } catch (err) { console.error('Failed to restore user:', item.email, err); skipped++; }
     }
-
-    return reply.send(ok({ total: data.length, inserted, updated, skipped }, `Successfully restored users`));
+    return reply.send(ok({ total: data.length, inserted, updated, skipped }, `Restored users`));
   });
 
-  app.get('/settings', { preHandler: requireAdmin }, async (request: FastifyRequest, reply: FastifyReply) => {
+  app.get('/settings', async (request: FastifyRequest, reply: FastifyReply) => {
+    const user = await authenticate(request, reply);
+    if (!user) return;
+    if (user.role !== 'ADMIN' && user.role !== 'admin') {
+      return reply.status(403).send(fail('Forbidden: Admin access required'));
+    }
     const settings = await prisma.urRedirectSet.findMany();
     return reply.send(ok(settings, 'Settings exported successfully'));
   });
 
-  app.post('/settings', { preHandler: requireAdmin }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const { data, strategy = 'upsert' } = request.body as {
-      data: any[];
-      strategy: 'replace' | 'insert_unique' | 'upsert';
-    };
+  app.post('/settings', async (request: FastifyRequest, reply: FastifyReply) => {
+    const user = await authenticate(request, reply);
+    if (!user) return;
+    if (user.role !== 'ADMIN' && user.role !== 'admin') {
+      return reply.status(403).send(fail('Forbidden: Admin access required'));
+    }
 
+    const { data, strategy = 'upsert' } = request.body as { data: any[]; strategy: string };
     if (!Array.isArray(data)) {
       return reply.status(400).send(fail('Invalid data format. Expected an array.'));
     }
 
-    let inserted = 0;
-    let updated = 0;
-    let skipped = 0;
-
+    let inserted = 0, updated = 0, skipped = 0;
     if (strategy === 'replace') {
-      await prisma.urRedirectSet.deleteMany();
+      await prisma.urRedirectSet.deleteMany({});
     }
-
     for (const item of data) {
-      if (!item.key) {
-        skipped++;
-        continue;
-      }
+      if (!item.key) { skipped++; continue; }
       try {
         const existing = await prisma.urRedirectSet.findUnique({ where: { key: item.key } });
-
-        if (strategy === 'insert_unique' || strategy === 'replace') {
-          if (!existing) {
-            await prisma.urRedirectSet.create({ data: { key: item.key, value: String(item.value) } });
-            inserted++;
-          } else {
-            skipped++;
-          }
-        } else if (strategy === 'upsert') {
-          if (existing) {
+        if (existing) {
+          if (strategy === 'upsert') {
             await prisma.urRedirectSet.update({ where: { key: item.key }, data: { value: String(item.value) } });
             updated++;
-          } else {
-            await prisma.urRedirectSet.create({ data: { key: item.key, value: String(item.value) } });
-            inserted++;
-          }
+          } else { skipped++; }
+        } else {
+          await prisma.urRedirectSet.create({ data: { key: item.key, value: String(item.value), category: item.category } });
+          inserted++;
         }
-      } catch (err) {
-        console.error('Failed to import setting:', item.key, err);
-        skipped++;
-      }
+      } catch (err) { console.error('Failed to restore setting:', item.key, err); skipped++; }
     }
-
-    return reply.send(ok({ total: data.length, inserted, updated, skipped }, `Successfully restored settings`));
+    return reply.send(ok({ total: data.length, inserted, updated, skipped }, `Restored settings`));
   });
 }
