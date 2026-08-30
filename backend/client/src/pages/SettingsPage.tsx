@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import Layout from '../components/Layout';
@@ -38,6 +38,10 @@ export default function SettingsPage() {
   const { user } = useAuth();
   const { settings: contextSettings, refreshSettings } = useSettings();
   const [localSettings, setLocalSettings] = useState<AppSettings>(contextSettings);
+  useEffect(() => {
+    setLocalSettings(contextSettings);
+  }, [contextSettings]);
+
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');

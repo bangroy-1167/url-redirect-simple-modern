@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import path from 'path'
 
 export default defineConfig({
   plugins: [
@@ -102,13 +103,13 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api8url': {
-        target: 'http://localhost:38802',
+        target: 'http://localhost:33002',
         changeOrigin: true,
       },
     },
   },
   build: {
-    outDir: 'dist',
+    outDir: '../public',
     emptyOutDir: true,
   },
 })
