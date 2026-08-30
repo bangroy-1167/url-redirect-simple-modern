@@ -440,3 +440,47 @@ Added a complete Backup & Restore management tab under the admin panel settings,
 - Regular users can export and import their own URLs.
 - Admin users can manage backups for URLs, Users, and Settings.
 - Improved user experience including preview details, size format mapping, clear warnings, and confirmation modals before importing to avoid data loss. Backup names auto-append dates for structured backups.
+
+## Changelog
+
+### v.2.12 - Small Fix
+- **IP Tracking Fix**: Improved IP detection with proper header priority:
+  - Cloudflare (`cf-connecting-ip`, `x-cf-connecting-ip`)
+  - Standard proxies (`x-forwarded-for`)
+  - AWS ALB (`x-real-ip`)
+  - Fastify request IP
+  - Fallback to localhost
+
+### v.2.11 - Major Release
+- **Backup/Restore System**
+  - Export/Import URLs, Users, Settings to JSON
+  - 3 Restore strategies: Replace, Insert Unique, Upsert
+  - Clear URLs (Truncate all)
+  - Clear Non-Admin Users (Admin protected)
+  - User Resolution Options (skip, assign_to_me, create_inactive)
+  
+- **PWA Support**
+  - Installable as app on mobile/desktop
+  - Offline support with service worker
+  - Auto-update capability
+
+- **Multi-language Support**
+  - 8 languages supported
+  - Language toggle in header
+
+- **Bug Fixes**
+  - Settings loading after save
+  - IP tracking for URL hits
+  - Expiry date clear
+  - JWT redirect bug
+  - Backup routes auth (inline auth for plugin compatibility)
+
+- **UI Improvements**
+  - Enhanced icons
+  - Dark mode CSS classes
+  - Better feedback for operations
+
+---
+
+**Current Version**: v2.12
+**Last Updated**: 2026-08-30
