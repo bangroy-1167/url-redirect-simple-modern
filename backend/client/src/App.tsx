@@ -7,6 +7,7 @@ import DashboardPage from './pages/DashboardPage';
 import UrlsPage from './pages/UrlsPage';
 import UsersPage from './pages/UsersPage';
 import SettingsPage from './pages/SettingsPage';
+import BackupRestorePage from './pages/BackupRestorePage';
 import LogoutPage from './pages/LogoutPage';
 import UrlFoundPage from './pages/UrlFoundPage';
 
@@ -72,6 +73,7 @@ function AppRoutes() {
             </ProtectedRoute>
           }
         />
+        <Route path="/kelola/backup" element={<ProtectedRoute><BackupRestorePage /></ProtectedRoute>} />
         <Route
           path="/kelola/users"
           element={

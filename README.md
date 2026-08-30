@@ -430,3 +430,13 @@ Untuk bantuan atau pertanyaan:
 **Version**: 1.0.0  
 **Last Updated**: 2026-07-16  
 **Status**: Ready for Development
+
+## New Features (v.2.11)
+
+### Backup & Restore
+Added a complete Backup & Restore management tab under the admin panel settings, with the following functionalities:
+- Export data to `.json` files for URLs, Users, and Settings.
+- Restoring from valid `.json` export files back to the database.
+- Regular users can export and import their own URLs.
+- Admin users can manage backups for URLs, Users, and Settings.
+- Improved user experience including preview details, size format mapping, clear warnings, and confirmation modals before importing to avoid data loss. Backup names auto-append dates for structured backups.

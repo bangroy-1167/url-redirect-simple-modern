@@ -345,7 +345,7 @@ export async function publicRoutes(app: FastifyInstance) {
           data: {
             urlId: url.id,
             shortUrl: url.shortUrl,
-            ipAddress: request.ip,
+            ipAddress: (request.headers['x-forwarded-for'] as string)?.split(',')[0] || request.ip,
             userAgent: userAgent || null,
             referer: request.headers['referer'] || null,
             deviceType,

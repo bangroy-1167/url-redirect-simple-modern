@@ -9,9 +9,10 @@ import { useRef, useEffect } from 'react';
 
 interface LayoutProps {
   children: ReactNode;
-  activePage?: 'dashboard' | 'urls' | 'users' | 'settings';
+  activePage?: 'dashboard' | 'urls' | 'users' | 'settings' | 'backup';
 }
 
+import { Database } from "lucide-react";
 export default function Layout({ children, activePage }: LayoutProps) {
   const { user, logout } = useAuth();
   const { settings } = useSettings();
@@ -37,6 +38,7 @@ export default function Layout({ children, activePage }: LayoutProps) {
   const navItems = [
     { to: '/kelola', label: 'Dashboard', page: 'dashboard' as const },
     { to: '/kelola/urls', label: 'URLs', page: 'urls' as const },
+    { to: '/kelola/backup', label: 'Backup/Restore', page: 'backup' as const, icon: Database },
     ...(user?.role === 'ADMIN' ? [
       { to: '/kelola/users', label: 'Users', page: 'users' as const },
       { to: '/kelola/settings', label: 'Settings', page: 'settings' as const, icon: Settings },

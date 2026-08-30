@@ -316,7 +316,7 @@ async function publicRoutes(app) {
                 data: {
                     urlId: url.id,
                     shortUrl: url.shortUrl,
-                    ipAddress: request.ip,
+                    ipAddress: request.headers['x-forwarded-for']?.split(',')[0] || request.ip,
                     userAgent: userAgent || null,
                     referer: request.headers['referer'] || null,
                     deviceType,

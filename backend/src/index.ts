@@ -19,6 +19,7 @@ import { authMiddleware } from './middleware/auth.middleware';
 import { authRoutes } from './routes/auth.routes';
 import { urlRoutes } from './routes/url.routes';
 import { adminRoutes } from './routes/admin.routes';
+import { backupRoutes } from './routes/backup.routes';
 import { analyticsRoutes } from './routes/analytics.routes';
 import { publicRoutes } from './routes/public.routes';
 
@@ -128,6 +129,8 @@ async function buildApp() {
   app.get('/kelola/users', async (request, reply) => sendSpaIndex(request, reply));
   app.get('/kelola/settings', async (request, reply) => sendSpaIndex(request, reply));
 
+  app.get('/kelola/backup', async (request, reply) => sendSpaIndex(request, reply))
+
 
 
   // Register auth middleware
@@ -138,6 +141,7 @@ async function buildApp() {
   await app.register(urlRoutes, { prefix: `${API_PREFIX}/urls` });
   await app.register(analyticsRoutes, { prefix: `${API_PREFIX}/analytics` });
   await app.register(adminRoutes, { prefix: `${API_PREFIX}/admin` });
+  await app.register(backupRoutes, { prefix: `${API_PREFIX}/backup` });
 
   return app;
 }
