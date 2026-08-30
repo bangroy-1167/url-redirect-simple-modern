@@ -18,6 +18,38 @@ const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const API_PREFIX = process.env.API_PREFIX || '/api8url';
 // User agent parsing helper
+// IP address parsing helper
+function getClientIP(request) {
+    // Check various headers in order of preference
+    const headers = request.headers;
+    // Cloudflare: Real visitor IP
+    const cfConnectingIP = headers['cf-connecting-ip'];
+    if (cfConnectingIP)
+        return String(cfConnectingIP).split(',')[0].trim();
+    // Cloudflare alternative
+    const cfIP = headers['x-cf-connecting-ip'];
+    if (cfIP)
+        return String(cfIP).split(',')[0].trim();
+    // Standard proxies
+    const forwardedFor = headers['x-forwarded-for'];
+    if (forwardedFor)
+        return String(forwardedFor).split(',')[0].trim();
+    // AWS ALB / Load Balancer
+    const xRealIP = headers['x-real-ip'];
+    if (xRealIP)
+        return String(xRealIP).split(',')[0].trim();
+    // Fastify request IP
+    const fastifyIP = request.ip;
+    if (fastifyIP && fastifyIP !== '127.0.0.1' && fastifyIP !== '::1' && fastifyIP !== '::ffff:127.0.0.1') {
+        return fastifyIP;
+    }
+    // Fallback to remoteAddress if available
+    const remoteAddress = request.routerMethod === 'GET' ? request.ip : null;
+    if (remoteAddress && remoteAddress !== '127.0.0.1')
+        return remoteAddress;
+    // Last resort
+    return '127.0.0.1';
+}
 function parseUserAgent(userAgent) {
     const ua = userAgent.toLowerCase();
     // Detect device type (Prisma enum uses uppercase)
@@ -316,7 +348,7 @@ async function publicRoutes(app) {
                 data: {
                     urlId: url.id,
                     shortUrl: url.shortUrl,
-                    ipAddress: request.headers['x-forwarded-for']?.split(',')[0] || request.ip,
+                    ipAddress: getClientIP(request),
                     userAgent: userAgent || null,
                     referer: request.headers['referer'] || null,
                     deviceType,
