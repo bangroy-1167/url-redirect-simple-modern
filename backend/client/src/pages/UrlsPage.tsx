@@ -24,6 +24,43 @@ function generateShortUrl(): string {
   return result;
 }
 
+/**
+ * Returns the number of full calendar days from `now` to the expiry date.
+ *
+ * Convention (matches backend `isExpired`):
+ *   - The expiry date is the LAST day the URL is accessible (inclusive).
+ *   - `diffDays === 0` means expiry is today (still accessible).
+ *   - `diffDays > 0`  means expiry is in N days (still accessible).
+ *   - `diffDays < 0`  means expiry has passed (already past end-of-day).
+ */
+function daysUntilExpiry(expDate: Date | string | null | undefined, now: Date = new Date()): number | null {
+  if (!expDate) return null;
+  const expiry = expDate instanceof Date ? expDate : new Date(expDate);
+  if (isNaN(expiry.getTime())) return null;
+
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const expiryStart = new Date(expiry.getFullYear(), expiry.getMonth(), expiry.getDate());
+  const MS_PER_DAY = 1000 * 60 * 60 * 24;
+  return Math.round((expiryStart.getTime() - todayStart.getTime()) / MS_PER_DAY);
+}
+
+type ExpiryDisplayInfo = {
+  isExpired: boolean;
+  /** Number of exclamation marks (0..3). 0 means no warning. */
+  exclamationMarks: number;
+};
+
+export function getExpiryDisplayInfo(expDate: Date | string | null | undefined, now?: Date): ExpiryDisplayInfo {
+  const days = daysUntilExpiry(expDate, now);
+  if (days === null) return { isExpired: false, exclamationMarks: 0 };
+  if (days < 0) return { isExpired: true, exclamationMarks: 0 };
+  // 0 = today, 1 = tomorrow, 2 = day after tomorrow. Capped at 3 exclamation marks.
+  if (days === 0) return { isExpired: false, exclamationMarks: 3 };
+  if (days === 1) return { isExpired: false, exclamationMarks: 2 };
+  if (days === 2) return { isExpired: false, exclamationMarks: 1 };
+  return { isExpired: false, exclamationMarks: 0 };
+}
+
 export default function UrlsPage() {
   const { user } = useAuth();
   const { settings } = useSettings();
@@ -573,17 +610,25 @@ ${fullUrl}
                           <span className="truncate" title={url.title || url.keterangan || '-'}>
                             {url.title || url.keterangan || '-'}
                           </span>
-                          {url.expDate && (
-                            new Date(url.expDate).getTime() <= new Date().getTime() ? (
-                              <span className="text-red-500 flex-shrink-0" title={`Expired: ${new Date(url.expDate).toLocaleDateString('id-ID')}`}>
-                                <TimerOff className="w-3.5 h-3.5" />
+                          {url.expDate && (() => {
+                            const { isExpired, exclamationMarks } = getExpiryDisplayInfo(url.expDate);
+                            const formattedDate = new Date(url.expDate).toLocaleDateString('id-ID');
+                            const titleText = isExpired ? `Expired: ${formattedDate}` : `Valid until: ${formattedDate}`;
+                            const bang = '!'.repeat(exclamationMarks);
+                            return (
+                              <span
+                                className={`flex-shrink-0 inline-flex items-center gap-0.5 ${isExpired ? 'text-red-500' : 'text-green-500'}`}
+                                title={titleText}
+                              >
+                                {isExpired ? (
+                                  <TimerOff className="w-3.5 h-3.5" />
+                                ) : (
+                                  <Timer className="w-3.5 h-3.5" />
+                                )}
+                                {bang && <span className="text-xs font-semibold leading-none">{bang}</span>}
                               </span>
-                            ) : (
-                              <span className="text-green-500 flex-shrink-0" title={`Valid until: ${new Date(url.expDate).toLocaleDateString('id-ID')}`}>
-                                <Timer className="w-3.5 h-3.5" />
-                              </span>
-                            )
-                          )}
+                            );
+                          })()}
                         </div>
                         {url.user && (
                           <div className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 truncate" title={`Dibuat oleh: ${url.user.username || url.user.email}`}>
@@ -693,21 +738,32 @@ ${fullUrl}
                       @{url.user.username || url.user.email?.split('@')[0]}
                     </p>
                   )}
-                  {url.expDate && (
-                    <div className="flex items-center gap-1 mt-1 text-xs">
-                      {new Date(url.expDate).getTime() <= new Date().getTime() ? (
-                        <>
-                          <TimerOff className="w-3 h-3 text-red-500" />
-                          <span className="text-red-500">Expired: {new Date(url.expDate).toLocaleDateString('id-ID')}</span>
-                        </>
-                      ) : (
-                        <>
-                          <Timer className="w-3 h-3 text-green-500" />
-                          <span className="text-green-500">Valid: {new Date(url.expDate).toLocaleDateString('id-ID')}</span>
-                        </>
-                      )}
-                    </div>
-                  )}
+                  {url.expDate && (() => {
+                    const { isExpired, exclamationMarks } = getExpiryDisplayInfo(url.expDate);
+                    const formattedDate = new Date(url.expDate).toLocaleDateString('id-ID');
+                    const bang = '!'.repeat(exclamationMarks);
+                    return (
+                      <div className="flex items-center gap-1 mt-1 text-xs">
+                        {isExpired ? (
+                          <>
+                            <TimerOff className="w-3 h-3 text-red-500" />
+                            <span className="text-red-500 inline-flex items-center gap-0.5">
+                              <span>Expired: {formattedDate}</span>
+                              {bang && <span className="font-semibold leading-none">{bang}</span>}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <Timer className="w-3 h-3 text-green-500" />
+                            <span className="text-green-500 inline-flex items-center gap-0.5">
+                              <span>Valid: {formattedDate}</span>
+                              {bang && <span className="font-semibold leading-none">{bang}</span>}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
                 
                 {/* Meta Info */}
