@@ -20,41 +20,6 @@ interface RedirectParams {
 }
 
 // User agent parsing helper
-// IP address parsing helper
-function getClientIP(request: FastifyRequest): string {
-  // Check various headers in order of preference
-  const headers = request.headers;
-  
-  // Cloudflare: Real visitor IP
-  const cfConnectingIP = headers['cf-connecting-ip'];
-  if (cfConnectingIP) return String(cfConnectingIP).split(',')[0].trim();
-  
-  // Cloudflare alternative
-  const cfIP = headers['x-cf-connecting-ip'];
-  if (cfIP) return String(cfIP).split(',')[0].trim();
-  
-  // Standard proxies
-  const forwardedFor = headers['x-forwarded-for'];
-  if (forwardedFor) return String(forwardedFor).split(',')[0].trim();
-  
-  // AWS ALB / Load Balancer
-  const xRealIP = headers['x-real-ip'];
-  if (xRealIP) return String(xRealIP).split(',')[0].trim();
-  
-  // Fastify request IP
-  const fastifyIP = request.ip;
-  if (fastifyIP && fastifyIP !== '127.0.0.1' && fastifyIP !== '::1' && fastifyIP !== '::ffff:127.0.0.1') {
-    return fastifyIP;
-  }
-  
-  // Fallback to remoteAddress if available
-  const remoteAddress = (request as any).routerMethod === 'GET' ? (request as any).ip : null;
-  if (remoteAddress && remoteAddress !== '127.0.0.1') return remoteAddress;
-  
-  // Last resort
-  return '127.0.0.1';
-}
-
 function parseUserAgent(userAgent: string): { deviceType: 'DESKTOP' | 'MOBILE' | 'TABLET' | 'OTHER', browser: string, os: string } {
   const ua = userAgent.toLowerCase();
   
@@ -115,6 +80,34 @@ async function getSetting(key: string, fallback: string): Promise<string> {
   } catch {
     return fallback;
   }
+}
+
+/**
+ * Helper to check if a URL has expired.
+ *
+ * Behavior change: the configured expiry date is treated as the LAST day the
+ * URL can be accessed (inclusive). The URL is considered expired starting
+ * from 00:00 of the day AFTER the configured expiry date.
+ *
+ * Examples (date-only `expDate`):
+ *   - expDate = 2026-09-04 -> accessible on 2026-09-04 (whole day),
+ *     expired starting 2026-09-05 00:00.
+ *   - expDate with time 2026-09-04T23:59:59 -> treated as the end of that day.
+ *
+ * Returns false when `expDate` is null/undefined.
+ */
+function isExpired(expDate: Date | string | null | undefined): boolean {
+  if (!expDate) return false;
+  const expiry = expDate instanceof Date ? expDate : new Date(expDate);
+  if (isNaN(expiry.getTime())) return false;
+  // Compute end-of-day (23:59:59.999) for the expiry calendar day, in local TZ.
+  const endOfExpiryDay = new Date(
+    expiry.getFullYear(),
+    expiry.getMonth(),
+    expiry.getDate(),
+    23, 59, 59, 999
+  );
+  return new Date().getTime() > endOfExpiryDay.getTime();
 }
 
 // Helper to render HTML page with app branding
@@ -342,8 +335,8 @@ export async function publicRoutes(app: FastifyInstance) {
         return reply.status(404).type('text/html').send(renderHtml(title, message, buttonText, buttonUrl, appName, appSubtitle, appVersion));
       }
       
-      // Check expiration
-      if (url.expDate && new Date(url.expDate) < new Date()) {
+      // Check expiration (expiry date is inclusive end-of-day)
+      if (isExpired(url.expDate)) {
         const [title, message, buttonText, buttonUrl, appName, appSubtitle, appVersion] = await Promise.all([
           getSetting('expired_title', DEFAULT_MESSAGES.expiredTitle),
           getSetting('expired_message', DEFAULT_MESSAGES.expiredMessage),
@@ -380,7 +373,7 @@ export async function publicRoutes(app: FastifyInstance) {
           data: {
             urlId: url.id,
             shortUrl: url.shortUrl,
-            ipAddress: getClientIP(request),
+            ipAddress: (request.headers['x-forwarded-for'] as string)?.split(',')[0] || request.ip,
             userAgent: userAgent || null,
             referer: request.headers['referer'] || null,
             deviceType,
@@ -446,8 +439,8 @@ export async function publicRoutes(app: FastifyInstance) {
         ));
       }
       
-      // Check expiration
-      if (url.expDate && new Date(url.expDate) < new Date()) {
+      // Check expiration (expiry date is inclusive end-of-day)
+      if (isExpired(url.expDate)) {
         return reply.type('text/html').send(renderHtml(
           'URL Kadaluarsa',
           'Tautan yang Anda cari telah kadaluarsa.',
@@ -501,18 +494,18 @@ export async function publicRoutes(app: FastifyInstance) {
         });
       }
       
-      // Check if URL is available
-      const isExpired = url.expDate ? new Date(url.expDate) < new Date() : false;
-      const isAvailable = url.isActive && !isExpired;
+      // Check if URL is available (expiry date is inclusive end-of-day)
+      const isExpiredFlag = isExpired(url.expDate);
+      const isAvailable = url.isActive && !isExpiredFlag;
       
       if (!isAvailable) {
         return reply.status(410).send({
           success: false,
-          message: isExpired ? 'URL telah kadaluarsa' : 'URL tidak aktif',
+          message: isExpiredFlag ? 'URL telah kadaluarsa' : 'URL tidak aktif',
           data: {
             shortUrl: url.shortUrl,
             title: url.title,
-            isExpired,
+            isExpired: isExpiredFlag,
             isActive: url.isActive,
           },
         });
@@ -579,12 +572,12 @@ export async function publicRoutes(app: FastifyInstance) {
           });
         }
         
-        // Check if URL is available
-        const isExpired = url.expDate ? new Date(url.expDate) < new Date() : false;
-        if (!url.isActive || isExpired) {
+        // Check if URL is available (expiry date is inclusive end-of-day)
+        const isExpiredFlag = isExpired(url.expDate);
+        if (!url.isActive || isExpiredFlag) {
           return reply.status(410).send({
             success: false,
-            message: isExpired ? 'URL telah kadaluarsa' : 'URL tidak aktif',
+            message: isExpiredFlag ? 'URL telah kadaluarsa' : 'URL tidak aktif',
           });
         }
         
@@ -684,14 +677,14 @@ export async function publicRoutes(app: FastifyInstance) {
         });
       }
       
-      const isExpired = url.expDate ? new Date(url.expDate) < new Date() : false;
+      const isExpiredFlag = isExpired(url.expDate);
       
       return reply.send({
         success: true,
         data: {
           ...url,
-          isExpired,
-          isAvailable: url.isActive && !isExpired,
+          isExpired: isExpiredFlag,
+          isAvailable: url.isActive && !isExpiredFlag,
         },
       });
     }
