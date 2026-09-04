@@ -456,6 +456,13 @@ Added a complete Backup & Restore management tab under the admin panel settings,
     tidak ada double-count)
 - **File**: `backend/src/routes/public.routes.ts`
 - **Docs**: koreksi inkonsistensi footer versi (v.2.13) + bump ke v.2.14.
+- **Deploy note (build gotcha)**: frontend bundle HARUS di-build TANPA
+  `backend/client/.env` yang berisi `VITE_API_URL` dev — nilainya ter-bake
+  permanen ke bundle dan membuat login/admin gagal di production (request API
+  mengarah ke backend dev yang mati), sementara halaman verify password tetap
+  jalan karena memakai `fetch` relatif. File env dev sekarang disimpan sebagai
+  `backend/client/.env.development` (hanya dipakai `npm run dev`, otomatis
+  diabaikan saat `npm run build` sesuai konvensi Vite) + di-gitignore.
 
 ### v.2.13 - Expiry UX Fix
 - **Inclusive end-of-day expiry date**:
