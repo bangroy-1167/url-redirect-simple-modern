@@ -592,6 +592,39 @@ export async function publicRoutes(app: FastifyInstance) {
               message: 'Password salah',
             });
           }
+
+          // Password verified successfully -> increment hit counter and log analytics
+          // for password-protected URLs. This mirrors the behavior of the public
+          // redirect endpoint (/:shortUrl) which increments the hit counter for
+          // URLs without password. We log hits only after successful verification
+          // so failed password attempts don't pollute analytics.
+          try {
+            await prisma.url8.update({
+              where: { id: url.id },
+              data: { hitCounter: { increment: 1 } },
+            });
+          } catch (err) {
+            console.error('[DEBUG verifyPassword] Failed to increment hitCounter:', err);
+          }
+
+          try {
+            const userAgent = request.headers['user-agent'] || '';
+            const { deviceType, browser, os } = parseUserAgent(userAgent);
+            await prisma.urlHit.create({
+              data: {
+                urlId: url.id,
+                shortUrl: url.shortUrl,
+                ipAddress: (request.headers['x-forwarded-for'] as string)?.split(',')[0] || request.ip,
+                userAgent: userAgent || null,
+                referer: request.headers['referer'] || null,
+                deviceType,
+                browser,
+                os,
+              },
+            });
+          } catch (err) {
+            console.error('[DEBUG verifyPassword] Failed to log hit:', err);
+          }
         } else {
           // No password set, but API called - treat as invalid
           return reply.status(401).send({
