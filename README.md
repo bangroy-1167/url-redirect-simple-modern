@@ -443,6 +443,26 @@ Added a complete Backup & Restore management tab under the admin panel settings,
 
 ## Changelog
 
+### v.2.13 - Expiry UX Fix
+- **Inclusive end-of-day expiry date**:
+  - The configured expiry date is now treated as the LAST day the URL is accessible.
+  - Example: a URL with expiry date `2026-09-04` is accessible on `2026-09-04` (whole day)
+    and expires starting from `2026-09-05 00:00`. Previously it was treated as already
+    expired on the same day at 00:00.
+- **Near-expiry warning marks in URL list**:
+  - For URLs with expiry within 3 days (including today), a `!` / `!!` / `!!!` indicator
+    appears next to the timer icon to highlight urgency.
+  - `daysLeft === 0` (today, last day) -> Timer + `!!!`
+  - `daysLeft === 1` (tomorrow)        -> Timer + `!!`
+  - `daysLeft === 2` (day after)       -> Timer + `!`
+  - `daysLeft >= 3`                    -> Timer (plain)
+  - `daysLeft < 0`                     -> TimerOff (red, expired)
+- **Backend helper**: `isExpired(expDate)` in `backend/src/routes/public.routes.ts`
+  is used across all 5 expiry-check locations for consistent behavior.
+- **Frontend helper**: `getExpiryDisplayInfo(expDate)` in
+  `backend/client/src/pages/UrlsPage.tsx` (also `export`ed for testing).
+- **Tooltip preserved**: hover info still shows absolute expiry date unchanged.
+
 ### v.2.12 - Small Fix
 - **IP Tracking Fix**: Improved IP detection with proper header priority:
   - Cloudflare (`cf-connecting-ip`, `x-cf-connecting-ip`)
