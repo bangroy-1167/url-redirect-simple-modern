@@ -443,6 +443,20 @@ Added a complete Backup & Restore management tab under the admin panel settings,
 
 ## Changelog
 
+### v.2.14 - Hit Counter Fix (Password-Protected URLs)
+- **Bug fix**: hit counter dan analytics (`url_hits`) untuk URL berpassword
+  sekarang tercatat dengan benar.
+- **Root cause**: endpoint redirect `GET /:shortUrl` melakukan early-return
+  (302 ke `/f/:shortUrl`) untuk URL berpassword SEBELUM increment hit counter,
+  sehingga URL berpassword tidak pernah tercatat sebagai hit.
+- **Solusi**: increment `hitCounter` + insert `urlHit` dilakukan di endpoint
+  `POST /api8url/f/:shortUrl/verify` SETELAH password berhasil diverifikasi.
+  - Password salah -> tidak dihitung (failed attempts tidak mengotori analytics)
+  - URL tanpa password -> tetap dihitung di `GET /:shortUrl` (tidak berubah,
+    tidak ada double-count)
+- **File**: `backend/src/routes/public.routes.ts`
+- **Docs**: koreksi inkonsistensi footer versi (v.2.13) + bump ke v.2.14.
+
 ### v.2.13 - Expiry UX Fix
 - **Inclusive end-of-day expiry date**:
   - The configured expiry date is now treated as the LAST day the URL is accessible.
@@ -502,5 +516,5 @@ Added a complete Backup & Restore management tab under the admin panel settings,
 
 ---
 
-**Current Version**: v2.12
-**Last Updated**: 2026-08-30
+**Current Version**: v2.14
+**Last Updated**: 2026-09-04
